@@ -168,9 +168,12 @@
 
   function renderHome() {
     $('#greeting').textContent = state.settings.name ? `Hej ${state.settings.name}!` : 'Hej!';
-    $('#spell-level-label').textContent = levelLabel('spell');
-    $('#math-level-label').textContent = levelLabel('math');
-    $('#pattern-level-label').textContent = levelLabel('pattern');
+    for (const a of Object.keys(LEVELS)) {
+      $(`#${a}-level-label`).textContent = levelLabel(a);
+      // Én prik pr. niveau; de nåede niveauer er fyldt ud.
+      const pips = $(`#${a}-pips`);
+      pips.replaceChildren(...LEVELS[a].map((_, i) => el('span', i < state[a].level ? 'pip on' : 'pip')));
+    }
     $('#parent-hint').hidden = true;
     updateStars();
   }

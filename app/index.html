@@ -3,36 +3,48 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#4f7cff">
+  <meta name="theme-color" content="#fff6e5">
   <title>Stav og Regn</title>
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icons/icon-192.png">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="preload" href="fonts/andika-700.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
   <main id="app">
     <section id="screen-home" class="screen">
-      <header class="top">
-        <span></span>
-        <div class="stars-pill">⭐ <span data-stars>0</span></div>
+      <header class="home-top">
+        <div>
+          <h1 id="greeting">Hej!</h1>
+          <p class="home-sub">Hvad vil du øve?</p>
+        </div>
+        <div class="stars-pill" aria-label="Stjerner">⭐ <span data-stars>0</span></div>
       </header>
-      <h1 id="greeting">Hej!</h1>
-      <div class="home-buttons">
-        <button class="big-btn spell" id="go-spell">
-          <span class="big-emoji">🔤</span>
-          <span class="big-label">Stave</span>
-          <span class="big-sub" id="spell-level-label"></span>
+      <div class="area-grid">
+        <button class="area-card spell" id="go-spell">
+          <span class="area-icon" aria-hidden="true">🔤</span>
+          <span class="area-text">
+            <span class="area-title">Stave</span>
+            <span class="area-level" id="spell-level-label"></span>
+            <span class="pips" id="spell-pips" aria-hidden="true"></span>
+          </span>
         </button>
-        <button class="big-btn math" id="go-math">
-          <span class="big-emoji">🔢</span>
-          <span class="big-label">Regne</span>
-          <span class="big-sub" id="math-level-label"></span>
+        <button class="area-card math" id="go-math">
+          <span class="area-icon" aria-hidden="true">🔢</span>
+          <span class="area-text">
+            <span class="area-title">Regne</span>
+            <span class="area-level" id="math-level-label"></span>
+            <span class="pips" id="math-pips" aria-hidden="true"></span>
+          </span>
         </button>
-        <button class="big-btn pattern" id="go-pattern">
-          <span class="big-emoji">🧩</span>
-          <span class="big-label">Mønstre</span>
-          <span class="big-sub" id="pattern-level-label"></span>
+        <button class="area-card pattern" id="go-pattern">
+          <span class="area-icon" aria-hidden="true">🧩</span>
+          <span class="area-text">
+            <span class="area-title">Mønstre</span>
+            <span class="area-level" id="pattern-level-label"></span>
+            <span class="pips" id="pattern-pips" aria-hidden="true"></span>
+          </span>
         </button>
       </div>
       <button id="parent-btn" class="parent-btn" aria-label="Voksen-indstillinger (hold nede)">⚙️</button>
