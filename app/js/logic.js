@@ -38,6 +38,7 @@
       history: [], // afsluttede runder: { date: 'ÅÅÅÅ-MM-DD', area, total, firstTry }
       stickers: [], // id'er på klistermærker i albummet, i den rækkefølge de er vundet
       stickersSeen: 0, // så mange af stickers er set i albummet (resten vises som nye)
+      wordStats: {}, // pr. ord: { seen, misses, okInRow } – bruges til at øve de svære ord igen
     };
   }
 
@@ -48,6 +49,12 @@
     const state = { ...d, ...s, settings: { ...d.settings, ...s.settings } };
     state.stickers = Array.isArray(s.stickers) ? Array.from(new Set(s.stickers.filter((x) => typeof x === 'string'))) : [];
     state.stickersSeen = Math.min(Number.isInteger(s.stickersSeen) ? s.stickersSeen : state.stickers.length, state.stickers.length);
+    state.wordStats = {};
+    if (s.wordStats && typeof s.wordStats === 'object') {
+      for (const [w, v] of Object.entries(s.wordStats)) {
+        if (v && typeof v === 'object') state.wordStats[w] = { seen: v.seen | 0, misses: v.misses | 0, okInRow: v.okInRow | 0 };
+      }
+    }
     state.history = Array.isArray(s.history) ? s.history.filter((r) => r && typeof r.date === 'string') : [];
     for (const area of AREAS) {
       state[area] = { ...d[area], ...s[area] };
@@ -126,12 +133,63 @@
     return won;
   }
 
+  // ---------- Svære ord ----------
+
+  const HARD_WORD_CHANCE = 0.35; // så ofte vælges et svært ord, når der findes et
+  const HARD_UNTIL_OK = 2; // et ord er svært, til det er stavet rigtigt så mange gange i træk
+
+  function recordWord(state, word, firstTry) {
+    const st = state.wordStats[word] || (state.wordStats[word] = { seen: 0, misses: 0, okInRow: 0 });
+    st.seen++;
+    if (firstTry) st.okInRow++;
+    else {
+      st.misses++;
+      st.okInRow = 0;
+    }
+  }
+
+  const isHard = (st) => !!st && st.misses > 0 && st.okInRow < HARD_UNTIL_OK;
+
+  // De svære ord, flest fejl først.
+  function hardWords(state) {
+    return Object.entries(state.wordStats)
+      .filter(([, st]) => isHard(st))
+      .sort((a, b) => b[1].misses - a[1].misses || a[0].localeCompare(b[0], 'da'))
+      .map(([word, st]) => ({ word, ...st }));
+  }
+
+  // ---------- Overblik ----------
+
+  // De sidste 7 dage (ældste først) med antal runder pr. dag, plus tal pr. område.
+  function weekSummary(history, today) {
+    const days = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() - i);
+      days.push({ date: localDate(d), rounds: 0 });
+    }
+    const first = days[0].date;
+    const areas = {};
+    for (const r of history) {
+      if (r.date < first) continue;
+      const day = days.find((d) => d.date === r.date);
+      if (day) day.rounds++;
+      const a = areas[r.area] || (areas[r.area] = { rounds: 0, tasks: 0, firstTry: 0 });
+      a.rounds++;
+      a.tasks += r.total;
+      a.firstTry += r.firstTry;
+    }
+    return { days, areas };
+  }
+
   // ---------- Stave ----------
 
   // recent: de senest viste ord (ændres), så det samme ord ikke kommer igen med det samme.
-  function pickWord(rng, words, recent) {
+  // stats (valgfri): ordstatistik; svære ord vælges oftere, så de bliver øvet igen.
+  function pickWord(rng, words, recent, stats) {
     let candidates = words.filter((w) => !recent.includes(w.word));
     if (!candidates.length) candidates = words;
+    const hard = stats ? candidates.filter((w) => isHard(stats[w.word])) : [];
+    if (hard.length && rng() < HARD_WORD_CHANCE) candidates = hard;
     const w = pick(rng, candidates);
     recent.push(w.word);
     if (recent.length > 8) recent.shift();
@@ -226,6 +284,7 @@
   return {
     LEVEL_UP_AFTER, LEVEL_DOWN_AFTER, AREAS, ROUND_LENGTH, HISTORY_MAX,
     newRound, roundStep, saveRound, localDate, awardStickers,
+    HARD_WORD_CHANCE, HARD_UNTIL_OK, recordWord, hardWords, weekSummary,
     rand, pick, shuffle,
     defaultState, normalizeState, recordResult,
     pickWord, spellTask, makeChoices, mathTask, patternTask,

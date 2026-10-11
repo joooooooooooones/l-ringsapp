@@ -175,3 +175,50 @@ test('klistermærker: katalogets id er unikke, og gemte id overlever indlæsning
   const s = L.normalizeState({ stickers: ['haj', 'haj', 7, 'drage'] }, null);
   assert.deepEqual(s.stickers, ['haj', 'drage']);
 });
+
+test('svære ord: fejl gør ordet svært, to rigtige i træk gør det let igen', () => {
+  const state = L.normalizeState(null, null);
+  L.recordWord(state, 'kat', true);
+  assert.deepEqual(L.hardWords(state), []);
+  L.recordWord(state, 'sol', false);
+  L.recordWord(state, 'hus', false);
+  L.recordWord(state, 'hus', false);
+  assert.deepEqual(L.hardWords(state).map((h) => h.word), ['hus', 'sol'], 'flest fejl først');
+  L.recordWord(state, 'hus', true);
+  assert.equal(L.hardWords(state).length, 2, 'én rigtig er ikke nok');
+  L.recordWord(state, 'hus', true);
+  assert.deepEqual(L.hardWords(state).map((h) => h.word), ['sol']);
+  assert.deepEqual(state.wordStats.hus, { seen: 4, misses: 2, okInRow: 2 });
+});
+
+test('svære ord: kommer oftere igen, men ikke kun dem', () => {
+  const words = DATA.WORDS.short;
+  const stats = { kat: { seen: 1, misses: 1, okInRow: 0 } };
+  const rng = seeded(11);
+  let kat = 0;
+  const n = 4000;
+  for (let i = 0; i < n; i++) if (L.pickWord(rng, words, [], stats).word === 'kat') kat++;
+  const expected = L.HARD_WORD_CHANCE + (1 - L.HARD_WORD_CHANCE) / words.length; // ≈ 0,37
+  assert.ok(Math.abs(kat / n - expected) < 0.03, `andel ${kat / n} ≈ ${expected}`);
+  const recent = ['kat'];
+  assert.notEqual(L.pickWord(seeded(1), words, recent, stats).word, 'kat', 'et netop vist ord springes stadig over');
+});
+
+test('overblik: runder de sidste 7 dage og pr. område', () => {
+  const history = [
+    { date: '2026-10-01', area: 'spell', total: 10, firstTry: 2 }, // for gammel
+    { date: '2026-10-05', area: 'spell', total: 10, firstTry: 8 },
+    { date: '2026-10-11', area: 'spell', total: 10, firstTry: 6 },
+    { date: '2026-10-11', area: 'math', total: 10, firstTry: 10 },
+  ];
+  const w = L.weekSummary(history, new Date(2026, 9, 11, 18, 0));
+  assert.deepEqual(w.days.map((d) => d.date), ['2026-10-05', '2026-10-06', '2026-10-07', '2026-10-08', '2026-10-09', '2026-10-10', '2026-10-11']);
+  assert.deepEqual(w.days.map((d) => d.rounds), [1, 0, 0, 0, 0, 0, 2]);
+  assert.deepEqual(w.areas.spell, { rounds: 2, tasks: 20, firstTry: 14 });
+  assert.deepEqual(w.areas.math, { rounds: 1, tasks: 10, firstTry: 10 });
+});
+
+test('gemt tilstand: ordstatistik overlever indlæsning, ugyldige værdier ryddes', () => {
+  const s = L.normalizeState({ wordStats: { kat: { seen: 3, misses: 1, okInRow: 0 }, x: null, sol: 'vrøvl' } }, null);
+  assert.deepEqual(s.wordStats, { kat: { seen: 3, misses: 1, okInRow: 0 } });
+});
