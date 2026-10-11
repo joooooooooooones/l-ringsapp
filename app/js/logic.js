@@ -36,6 +36,7 @@
       math: { level: 1, streak: 0, misses: 0, done: 0 },
       pattern: { level: 1, streak: 0, misses: 0, done: 0 },
       history: [], // afsluttede runder: { date: 'ÅÅÅÅ-MM-DD', area, total, firstTry }
+      stickers: [], // id'er på klistermærker i albummet, i den rækkefølge de er vundet
     };
   }
 
@@ -44,6 +45,7 @@
     const d = defaultState();
     const s = saved && typeof saved === 'object' ? saved : {};
     const state = { ...d, ...s, settings: { ...d.settings, ...s.settings } };
+    state.stickers = Array.isArray(s.stickers) ? Array.from(new Set(s.stickers.filter((x) => typeof x === 'string'))) : [];
     state.history = Array.isArray(s.history) ? s.history.filter((r) => r && typeof r.date === 'string') : [];
     for (const area of AREAS) {
       state[area] = { ...d[area], ...s[area] };
@@ -103,6 +105,23 @@
   function localDate(d) {
     const p = (n) => String(n).padStart(2, '0');
     return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+  }
+
+  // ---------- Klistermærker ----------
+
+  // Én runde giver ét nyt klistermærke; en perfekt runde (alle rigtige i første forsøg) giver to.
+  // Returnerer de nye id'er (tom liste, når albummet er fuldt).
+  function awardStickers(rng, state, round, catalog) {
+    const count = round.firstTry >= round.done ? 2 : 1;
+    const won = [];
+    for (let i = 0; i < count; i++) {
+      const missing = catalog.filter((st) => !state.stickers.includes(st.id));
+      if (!missing.length) break;
+      const st = pick(rng, missing);
+      state.stickers.push(st.id);
+      won.push(st.id);
+    }
+    return won;
   }
 
   // ---------- Stave ----------
@@ -204,7 +223,7 @@
 
   return {
     LEVEL_UP_AFTER, LEVEL_DOWN_AFTER, AREAS, ROUND_LENGTH, HISTORY_MAX,
-    newRound, roundStep, saveRound, localDate,
+    newRound, roundStep, saveRound, localDate, awardStickers,
     rand, pick, shuffle,
     defaultState, normalizeState, recordResult,
     pickWord, spellTask, makeChoices, mathTask, patternTask,

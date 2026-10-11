@@ -155,3 +155,23 @@ test('lokal dato: ÅÅÅÅ-MM-DD efter lokal tid', () => {
   assert.equal(L.localDate(new Date(2026, 0, 5, 23, 30)), '2026-01-05');
   assert.equal(L.localDate(new Date(2026, 11, 31, 0, 1)), '2026-12-31');
 });
+
+test('klistermærker: én pr. runde, to for en perfekt runde, aldrig dubletter', () => {
+  const rng = seeded(5);
+  const state = L.normalizeState(null, null);
+  const ok = L.awardStickers(rng, state, { area: 'spell', done: 10, firstTry: 7 }, DATA.STICKERS);
+  assert.equal(ok.length, 1);
+  const perfect = L.awardStickers(rng, state, { area: 'spell', done: 10, firstTry: 10 }, DATA.STICKERS);
+  assert.equal(perfect.length, 2);
+  for (let i = 0; i < 100; i++) L.awardStickers(rng, state, { area: 'math', done: 10, firstTry: 10 }, DATA.STICKERS);
+  assert.equal(state.stickers.length, DATA.STICKERS.length, 'albummet kan fyldes helt');
+  assert.equal(new Set(state.stickers).size, state.stickers.length, 'ingen dubletter');
+  assert.deepEqual(L.awardStickers(rng, state, { area: 'math', done: 10, firstTry: 10 }, DATA.STICKERS), [], 'fuldt album giver intet');
+});
+
+test('klistermærker: katalogets id er unikke, og gemte id overlever indlæsning', () => {
+  const ids = DATA.STICKERS.map((s) => s.id);
+  assert.equal(new Set(ids).size, ids.length);
+  const s = L.normalizeState({ stickers: ['haj', 'haj', 7, 'drage'] }, null);
+  assert.deepEqual(s.stickers, ['haj', 'drage']);
+});
