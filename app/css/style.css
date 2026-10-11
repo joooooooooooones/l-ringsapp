@@ -50,6 +50,8 @@
   --bad: #d1343a;
   --hint: #ffc928;
   --star: #ffb800;
+  --progress: #b26b00; /* udfyldt fremdrift: ≥3:1 mod tomme felter og baggrund */
+  --sticker-soft: #fff1c2;
   --counted: #fff1b8;
   --danger-soft: #ffe3e3;
   --danger-ink: #b42318;
@@ -161,7 +163,7 @@ button:focus-visible, input:focus-visible {
 /* Fremdrift i runden: ét felt pr. opgave */
 .round-bar { display: flex; gap: 4px; flex: 1; max-width: 360px; }
 .seg { flex: 1; height: 14px; border-radius: 7px; background: var(--line-soft); transition: background 0.3s; }
-.seg.on { background: var(--star); }
+.seg.on { background: var(--progress); }
 
 /* ---------- Forside ---------- */
 
@@ -217,7 +219,7 @@ button:focus-visible, input:focus-visible {
 .area-title { font-size: 2rem; font-weight: 700; line-height: 1.1; }
 .area-level { font-size: var(--text-s); opacity: 0.95; }
 .pips { display: flex; gap: 5px; margin-top: 6px; }
-.pip { flex: 0 1 22px; min-width: 8px; height: 7px; border-radius: 4px; background: rgba(255, 255, 255, 0.35); }
+.pip { flex: 0 1 22px; min-width: 8px; height: 7px; border-radius: 4px; background: rgba(0, 0, 0, 0.3); }
 .pip.on { background: var(--on-color); }
 
 .parent-btn {
@@ -242,6 +244,7 @@ button:focus-visible, input:focus-visible {
 
 /* ---------- Opgaver ---------- */
 
+.task.arming { pointer-events: none; } /* kort pause efter skift, så et dobbelttryk ikke rammer det nye */
 .task {
   flex: 1;
   display: flex;
@@ -509,10 +512,10 @@ button:focus-visible, input:focus-visible {
   width: 100%;
   padding: var(--space-4);
   border-radius: var(--radius);
-  background: var(--pattern-soft);
-  border: 3px dashed var(--pattern);
+  background: var(--sticker-soft);
+  border: 3px dashed var(--progress);
 }
-.sticker-reveal-title { font-size: var(--text-m); font-weight: 700; color: var(--pattern-dark); }
+.sticker-reveal-title { font-size: var(--text-m); font-weight: 700; color: var(--ink); }
 .sticker-reveal-row { display: flex; gap: var(--space-5); justify-content: center; }
 .sticker-reveal-item { display: grid; justify-items: center; }
 .sticker-big { font-size: 4.2rem; line-height: 1.1; animation: flip-in 0.7s 0.3s both; }
@@ -641,8 +644,8 @@ button:focus-visible, input:focus-visible {
 .week-day { display: grid; grid-template-rows: 18px 1fr 20px; justify-items: center; gap: 2px; min-width: 0; }
 .week-count { font-size: 0.85rem; font-weight: 700; font-variant-numeric: tabular-nums; }
 .week-track { width: 100%; max-width: 34px; display: flex; align-items: flex-end; background: var(--bg); border-radius: 8px; overflow: hidden; }
-.week-bar { width: 100%; min-height: 0; background: var(--math); border-radius: 8px 8px 0 0; }
-.week-day.today .week-bar { background: var(--spell); }
+.week-bar { width: 100%; min-height: 0; background: var(--muted); border-radius: 8px 8px 0 0; }
+.week-day.today .week-bar { background: var(--ink); }
 .week-label { font-size: 0.8rem; color: var(--muted); white-space: nowrap; }
 .week-day.today .week-label { color: var(--ink); font-weight: 700; }
 
