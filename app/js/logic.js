@@ -39,6 +39,7 @@
       stickers: [], // id'er på klistermærker i albummet, i den rækkefølge de er vundet
       stickersSeen: 0, // så mange af stickers er set i albummet (resten vises som nye)
       wordStats: {}, // pr. ord: { seen, misses, okInRow } – bruges til at øve de svære ord igen
+      customWords: [], // ugens ord fra skolen, skrevet ind af en voksen: [{ word }]
     };
   }
 
@@ -55,6 +56,9 @@
         if (v && typeof v === 'object') state.wordStats[w] = { seen: v.seen | 0, misses: v.misses | 0, okInRow: v.okInRow | 0 };
       }
     }
+    state.customWords = Array.isArray(s.customWords)
+      ? s.customWords.filter((w) => w && parseCustomWord(String(w.word)).ok).map((w) => ({ word: w.word }))
+      : [];
     state.history = Array.isArray(s.history) ? s.history.filter((r) => r && typeof r.date === 'string') : [];
     for (const area of AREAS) {
       state[area] = { ...d[area], ...s[area] };
@@ -181,12 +185,42 @@
     return { days, areas };
   }
 
+  // ---------- Ugens ord ----------
+
+  const CUSTOM_WORD_MAX = 30;
+  const WORD_RE = /^[a-zæøåéü]{2,14}$/;
+
+  // Kontrollerer et ord skrevet af en voksen. Returnerer { ok, word } eller { ok: false, error }.
+  function parseCustomWord(text) {
+    const word = String(text).trim().toLocaleLowerCase('da');
+    if (!word) return { ok: false, error: 'Skriv et ord først.' };
+    if (/\s/.test(word)) return { ok: false, error: 'Skriv ét ord ad gangen (uden mellemrum).' };
+    if (!/^[a-zæøåéü]+$/.test(word)) return { ok: false, error: 'Brug kun bogstaver (a-å), ingen tal eller tegn.' };
+    if (!WORD_RE.test(word)) return { ok: false, error: 'Ordet skal have 2-14 bogstaver.' };
+    return { ok: true, word };
+  }
+
+  function addCustomWord(state, text) {
+    const r = parseCustomWord(text);
+    if (!r.ok) return r;
+    if (state.customWords.some((w) => w.word === r.word)) return { ok: false, error: `"${r.word}" er allerede på listen.` };
+    if (state.customWords.length >= CUSTOM_WORD_MAX) return { ok: false, error: `Der kan højst være ${CUSTOM_WORD_MAX} ord på listen.` };
+    state.customWords.push({ word: r.word });
+    return r;
+  }
+
+  function removeCustomWord(state, word) {
+    state.customWords = state.customWords.filter((w) => w.word !== word);
+  }
+
   // ---------- Stave ----------
 
   // recent: de senest viste ord (ændres), så det samme ord ikke kommer igen med det samme.
   // stats (valgfri): ordstatistik; svære ord vælges oftere, så de bliver øvet igen.
   function pickWord(rng, words, recent, stats) {
     let candidates = words.filter((w) => !recent.includes(w.word));
+    // Få ord (f.eks. ugens ord): undgå i det mindste at vise samme ord to gange i træk.
+    if (!candidates.length) candidates = words.filter((w) => w.word !== recent[recent.length - 1]);
     if (!candidates.length) candidates = words;
     const hard = stats ? candidates.filter((w) => isHard(stats[w.word])) : [];
     if (hard.length && rng() < HARD_WORD_CHANCE) candidates = hard;
@@ -285,6 +319,7 @@
     LEVEL_UP_AFTER, LEVEL_DOWN_AFTER, AREAS, ROUND_LENGTH, HISTORY_MAX,
     newRound, roundStep, saveRound, localDate, awardStickers,
     HARD_WORD_CHANCE, HARD_UNTIL_OK, recordWord, hardWords, weekSummary,
+    CUSTOM_WORD_MAX, parseCustomWord, addCustomWord, removeCustomWord,
     rand, pick, shuffle,
     defaultState, normalizeState, recordResult,
     pickWord, spellTask, makeChoices, mathTask, patternTask,

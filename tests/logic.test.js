@@ -222,3 +222,47 @@ test('gemt tilstand: ordstatistik overlever indlæsning, ugyldige værdier rydde
   const s = L.normalizeState({ wordStats: { kat: { seen: 3, misses: 1, okInRow: 0 }, x: null, sol: 'vrøvl' } }, null);
   assert.deepEqual(s.wordStats, { kat: { seen: 3, misses: 1, okInRow: 0 } });
 });
+
+test('ugens ord: gyldige ord tilføjes med små bogstaver, ugyldige afvises med en forklaring', () => {
+  const state = L.normalizeState(null, null);
+  assert.deepEqual(L.addCustomWord(state, '  Skole '), { ok: true, word: 'skole' });
+  assert.equal(L.addCustomWord(state, 'SKOLE').ok, false, 'dublet');
+  assert.match(L.addCustomWord(state, 'skole').error, /allerede/);
+  assert.match(L.addCustomWord(state, 'to ord').error, /mellemrum/);
+  assert.match(L.addCustomWord(state, 'abc1').error, /bogstaver/);
+  assert.match(L.addCustomWord(state, 'a').error, /2-14/);
+  assert.match(L.addCustomWord(state, '').error, /Skriv/);
+  assert.equal(L.addCustomWord(state, 'Æblegrød').word, 'æblegrød');
+  assert.deepEqual(state.customWords.map((w) => w.word), ['skole', 'æblegrød']);
+  L.removeCustomWord(state, 'skole');
+  assert.deepEqual(state.customWords.map((w) => w.word), ['æblegrød']);
+});
+
+test('ugens ord: højst 30, og ugyldige gemte ord ryddes ved indlæsning', () => {
+  const state = L.normalizeState(null, null);
+  for (let i = 0; i < 40; i++) L.addCustomWord(state, 'ord' + 'abcdefghijklmnopqrstuvwxyzæøå'[i % 29] + 'abcdefghijklmnopqrstuvwxyzæøå'[Math.floor(i / 29)]);
+  assert.equal(state.customWords.length, L.CUSTOM_WORD_MAX);
+  const s = L.normalizeState({ customWords: [{ word: 'hund' }, { word: '1x' }, null, { word: 'kat' }] }, null);
+  assert.deepEqual(s.customWords, [{ word: 'hund' }, { word: 'kat' }]);
+});
+
+test('ugens ord: med få ord kommer samme ord ikke to gange i træk', () => {
+  const words = [{ word: 'hund' }, { word: 'kat' }, { word: 'ko' }];
+  const rng = seeded(21);
+  const recent = [];
+  let last = null;
+  for (let i = 0; i < 200; i++) {
+    const w = L.pickWord(rng, words, recent).word;
+    assert.notEqual(w, last);
+    last = w;
+  }
+  const one = [{ word: 'hund' }];
+  assert.equal(L.pickWord(rng, one, ['hund']).word, 'hund', 'ét ord kan stadig vælges');
+});
+
+test('ugens ord: brikkerne kan danne ordet, også med bogstaver uden for den faste pulje', () => {
+  const rng = seeded(4);
+  const t = L.spellTask(rng, { mode: 'build', extra: 3 }, { word: 'zoo' }, DATA.LETTERS);
+  assert.deepEqual([...t.tiles].filter((l) => 'zo'.includes(l)).sort(), ['o', 'o', 'z']);
+  assert.equal(t.tiles.length, 6);
+});
