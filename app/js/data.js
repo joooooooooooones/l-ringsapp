@@ -233,6 +233,8 @@ window.DATA = {
     patternMissing: 'Hvad mangler?',
     roundDone: 'Godt gået! Du har lavet ti opgaver.',
     newSticker: 'Du har fået et nyt klistermærke!',
+    lookAtWord: 'Kig godt på ordet.',
+    spellFromMemory: 'Kan du stave det?',
   },
 
   // Sådan siges bogstaverne på dansk.

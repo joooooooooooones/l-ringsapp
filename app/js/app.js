@@ -178,6 +178,9 @@
     $('#parent-hint').hidden = true;
     updateStars();
     $('#album-count').textContent = state.stickers.length;
+    const n = state.customWords.length;
+    $('#go-words').hidden = n === 0;
+    $('#words-level-label').textContent = `${n} ord at øve`;
     $('#album-new').hidden = !(state.stickersSeen < state.stickers.length);
   }
 
@@ -185,6 +188,7 @@
   $('#go-math').addEventListener('click', () => startArea('math'));
   $('#go-pattern').addEventListener('click', () => startArea('pattern'));
   $('#go-album').addEventListener('click', () => open('album'));
+  $('#go-words').addEventListener('click', () => startArea('words'));
 
   function startArea(a) {
     area = a;
@@ -201,6 +205,7 @@
     renderRound();
     if (area === 'spell') spellTask();
     else if (area === 'math') mathTask();
+    else if (area === 'words') wordsTask();
     else patternTask();
   }
 
@@ -213,6 +218,7 @@
 
   // Returnerer +1 ved nyt niveau, -1 ved lavere niveau, ellers 0.
   function recordResult(a, firstTry) {
+    if (!LEVEL_COUNTS[a]) return 0; // Ugens ord har ingen niveauer
     const change = L.recordResult(state[a], LEVEL_COUNTS[a], firstTry);
     save();
     return change;
@@ -223,7 +229,7 @@
     const done = task;
     done.done = true;
     state.stars++;
-    if (area === 'spell') L.recordWord(state, done.word, done.mistakes === 0);
+    if (area === 'spell' || area === 'words') L.recordWord(state, done.word, done.mistakes === 0);
     const change = recordResult(area, done.mistakes === 0);
     const roundDone = L.roundStep(round, done.mistakes === 0);
     updateStars();
@@ -423,6 +429,76 @@
         if (hint) hint.classList.add('hint');
       }
     }
+  }
+
+  // ---------- Ugens ord: se, husk, stav ----------
+
+  const recentCustom = [];
+
+  function wordsTask() {
+    if (!state.customWords.length) return goHome();
+    const w = L.pickWord(rng, state.customWords, recentCustom, state.wordStats);
+    const t = L.spellTask(rng, { mode: 'build', extra: 3 }, w, LETTERS);
+    task = { word: w.word, letters: t.letters, mistakes: 0, pos: 0, wrongHere: 0, done: false };
+
+    const root = $('#task');
+    root.replaceChildren();
+
+    // 1. Se: ordet vises stort, indtil barnet er klar (eller efter 6 sekunder).
+    const look = el('div', 'look-card');
+    const shown = el('div', 'look-word', t.letters.map(fmt).join(''));
+    const ready = el('button', 'big-action words', 'Klar! 🙈');
+    look.append(el('p', 'look-title', 'Kig godt på ordet'), shown, ready);
+    root.append(look);
+    say(P.lookAtWord, w.word);
+    let started = false;
+    const start = () => {
+      if (started || task.word !== w.word || task.done || $('#screen-play').hidden) return;
+      started = true;
+      clearTimeout(autoHide);
+      buildFromMemory(t);
+    };
+    const autoHide = setTimeout(start, 6000);
+    ready.addEventListener('click', start);
+    ready.focus();
+  }
+
+  // 2.-3. Husk og stav: ordet er skjult; "Kig igen" viser det kort (tæller som hjælp).
+  function buildFromMemory(t) {
+    const root = $('#task');
+    root.replaceChildren();
+    const peek = el('button', 'small-btn peek', '👀 Kig igen');
+    const slots = el('div', 'slots');
+    t.letters.forEach(() => slots.append(el('div', 'slot')));
+    slots.children[0].classList.add('current');
+    const tiles = el('div', 'tiles');
+    t.tiles.forEach((l) => {
+      const tile = el('button', 'tile', fmt(l));
+      tile.dataset.letter = l;
+      tile.addEventListener('click', () => onBuildLetter(tile, l, slots, tiles));
+      tiles.append(tile);
+    });
+    peek.addEventListener('click', () => {
+      if (task.done) return;
+      task.mistakes++; // hjælp tæller ikke som rigtig i første forsøg
+      t.letters.forEach((l, i) => {
+        const s = slots.children[i];
+        if (!s.classList.contains('filled')) {
+          s.textContent = fmt(l);
+          s.classList.add('peeking');
+        }
+      });
+      setTimeout(() => {
+        Array.from(slots.children).forEach((s) => {
+          if (s.classList.contains('peeking')) {
+            s.textContent = '';
+            s.classList.remove('peeking');
+          }
+        });
+      }, 1800);
+    });
+    root.append(el('p', 'look-title', 'Kan du stave ordet?'), slots, tiles, peek);
+    say(P.spellFromMemory);
   }
 
   // ---------- Regne ----------
@@ -637,6 +713,7 @@
     $('#math-level-set').textContent = levelLabel('math');
     $('#pattern-level-set').textContent = levelLabel('pattern');
     renderWeek();
+    renderCustomWords();
     $('#stats').textContent =
       `I alt: ${state.stars} stjerner · ${state.spell.done} staveopgaver · ${state.math.done} regneopgaver · ${state.pattern.done} mønstre · ${state.stickers.length} klistermærker`;
     const hard = L.hardWords(state);
@@ -691,6 +768,71 @@
     else stats.prepend(el('p', 'note area-stat-head', 'Rigtige i første forsøg'));
   }
 
+  function renderCustomWords() {
+    const list = $('#custom-words');
+    list.replaceChildren(...state.customWords.map(({ word }) => {
+      const c = el('span', 'chip words-chip');
+      const remove = el('button', 'chip-remove', '✕');
+      remove.setAttribute('aria-label', `Fjern ${word}`);
+      remove.addEventListener('click', () => {
+        L.removeCustomWord(state, word);
+        save();
+        renderCustomWords();
+      });
+      c.append(el('strong', null, word), remove);
+      return c;
+    }));
+    const n = state.customWords.length;
+    $('#words-note').textContent = n
+      ? `${n} ord. De øves under "Ugens ord" på forsiden: ordet vises, skjules og staves med brikker.`
+      : 'Skriv ugens ord fra skolen, så kan de øves under "Ugens ord" på forsiden.';
+    $('#clear-words').hidden = n === 0;
+  }
+
+  $('#word-form').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const input = $('#word-input');
+    const r = L.addCustomWord(state, input.value);
+    const err = $('#word-error');
+    if (!r.ok) {
+      err.textContent = r.error;
+      err.hidden = false;
+      input.setAttribute('aria-invalid', 'true');
+      return;
+    }
+    err.hidden = true;
+    input.removeAttribute('aria-invalid');
+    input.value = '';
+    input.focus();
+    save();
+    renderCustomWords();
+  });
+  $('#word-input').addEventListener('input', () => {
+    $('#word-error').hidden = true;
+    $('#word-input').removeAttribute('aria-invalid');
+  });
+
+  // To tryk for at rydde listen, så det ikke sker ved et uheld.
+  const clearBtn = $('#clear-words');
+  const clearLabel = clearBtn.textContent;
+  let clearArmed = null;
+  clearBtn.addEventListener('click', () => {
+    if (!clearArmed) {
+      clearBtn.textContent = 'Tryk igen for at rydde listen';
+      clearArmed = setTimeout(() => {
+        clearArmed = null;
+        clearBtn.textContent = clearLabel;
+      }, 4000);
+      return;
+    }
+    clearTimeout(clearArmed);
+    clearArmed = null;
+    clearBtn.textContent = clearLabel;
+    state.customWords = [];
+    save();
+    renderCustomWords();
+  });
+
   $('#set-name').addEventListener('input', (e) => {
     state.settings.name = e.target.value.trim();
     save();
@@ -731,7 +873,7 @@
     clearTimeout(resetArmed);
     resetArmed = null;
     resetBtn.textContent = resetLabel;
-    state = { ...L.defaultState(), settings: state.settings };
+    state = { ...L.defaultState(), settings: state.settings, customWords: state.customWords };
     save();
     renderParent();
   });

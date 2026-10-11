@@ -53,6 +53,13 @@
             <span class="pips" id="pattern-pips" aria-hidden="true"></span>
           </span>
         </button>
+        <button class="area-card words" id="go-words" hidden>
+          <span class="area-icon" aria-hidden="true">📝</span>
+          <span class="area-text">
+            <span class="area-title">Ugens ord</span>
+            <span class="area-level" id="words-level-label"></span>
+          </span>
+        </button>
       </div>
       <button id="parent-btn" class="parent-btn" aria-label="Voksen-indstillinger (hold nede)">⚙️</button>
       <p class="parent-hint" id="parent-hint" hidden>Voksne: hold knappen nede</p>
@@ -84,6 +91,18 @@
         <span class="top-spacer"></span>
       </header>
       <div class="parent-body">
+        <section class="panel">
+          <h3>Ugens ord</h3>
+          <form class="word-form" id="word-form" autocomplete="off">
+            <input id="word-input" type="text" maxlength="14" placeholder="Skriv et ord fra skolen" aria-label="Nyt ord" autocapitalize="none" spellcheck="false">
+            <button class="small-btn primary" type="submit">Tilføj</button>
+          </form>
+          <p class="form-error" id="word-error" role="alert" hidden></p>
+          <div class="chips" id="custom-words"></div>
+          <p class="note" id="words-note"></p>
+          <button class="small-btn" id="clear-words" type="button" hidden>Ryd listen til en ny uge</button>
+        </section>
+
         <section class="panel">
           <h3>Den sidste uge</h3>
           <div class="week" id="week"></div>

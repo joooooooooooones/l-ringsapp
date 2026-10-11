@@ -598,6 +598,32 @@ button:focus-visible, input:focus-visible {
 }
 .small-btn.danger { background: var(--danger-soft); color: var(--danger-ink); }
 
+/* ---------- Ugens ord ---------- */
+
+.look-card {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-4);
+  width: min(100%, 560px);
+  padding: var(--space-6) var(--space-5);
+  background: var(--card);
+  border-radius: var(--radius-l);
+  box-shadow: var(--shadow), var(--shadow-lift);
+}
+.look-title { margin: 0; font-size: var(--text-l); font-weight: 700; color: var(--words-dark); text-align: center; }
+.look-word {
+  font-size: clamp(3rem, 16vw, 5.5rem);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  line-height: 1.1;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+  text-align: center;
+}
+.look-card .big-action { width: 100%; }
+.peek { min-width: 170px; font-size: var(--text-m); }
+.slot.peeking { color: var(--words); border-color: var(--words); border-style: solid; }
+
 /* Paneler på voksen-siden */
 .top-spacer { width: 56px; }
 .panel {
@@ -649,6 +675,34 @@ button:focus-visible, input:focus-visible {
   font-size: var(--text-m);
 }
 .chip-count { font-size: 0.8rem; color: var(--spell-dark); }
+
+.word-form { display: flex; gap: var(--space-2); }
+.word-form input {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  font-size: var(--text-m);
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 2px solid var(--input-line);
+  background: var(--card);
+  user-select: text;
+}
+.word-form input[aria-invalid="true"] { border-color: var(--danger-ink); }
+.small-btn.primary { background: var(--words); color: var(--on-color); box-shadow: 0 3px 0 var(--words-dark); }
+.form-error { margin: 0; color: var(--danger-ink); font-weight: 700; font-size: var(--text-s); }
+.words-chip { background: var(--words-soft); align-items: center; padding-right: 4px; }
+.chip-remove {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--words-dark);
+  font-size: 0.95rem;
+}
+.chip-remove:active { background: var(--card); }
 
 /* ---------- Tablet og store skærme ----------
    Barnet bruger primært tablet: alt bliver større, og forsiden bliver et gitter af kort. */
@@ -703,6 +757,8 @@ button:focus-visible, input:focus-visible {
   .feedback { font-size: 2.6rem; }
   .parent-body { max-width: 640px; margin: 0 auto; width: 100%; }
   .album-btn { font-size: 1.8rem; padding: 10px 22px; }
+  .look-card { width: min(100%, 720px); }
+  .look-word { font-size: 7rem; }
   .home-badges { flex-direction: row; align-items: center; gap: var(--space-3); }
   .album-grid { grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); }
   .sticker-emoji { font-size: 3.6rem; }
