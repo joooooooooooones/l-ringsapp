@@ -1,6 +1,6 @@
 # Stav og Regn
 
-En lille lære-app til et barn på ca. 6 år: **stave**, **regne** og **mønstre** på barnets eget niveau.
+En lille lære-app til et barn på ca. 6 år: **stave**, **regne**, **mønstre** og **ugens ord** på barnets eget niveau.
 Den kører som en web-app (PWA), der installeres på Android-telefonen/tabletten som en
 almindelig app, virker uden internet og koster ikke noget at hoste.
 
@@ -21,12 +21,22 @@ almindelig app, virker uden internet og koster ikke noget at hoste.
 4. Tal der vokser (3 4 5 6 ?) · 5. Tæl frem og tilbage (7 6 5 4 ?) ·
 6. Spring og huller (2 4 _ 8 · 10 20 30 ? · 5 10 15 ?)
 
+**Ugens ord** (skolens ord, skrevet ind af en voksen)
+Ordet vises stort, skjules, og barnet staver det med brikker ("se, husk, stav"). "Kig igen" viser ordet kort.
+
+**Runder og klistermærker:** En runde er 10 opgaver med en fremdriftslinje øverst. Til sidst
+kommer en afslutning med pokal og et nyt klistermærke til albummet (📒 på forsiden). En perfekt
+runde giver to. Manglende klistermærker står som silhuetter i albummet.
+
+**Øver de svære ord:** Ord med fejl kommer oftere igen, indtil de er stavet rigtigt to gange i træk.
+
 **Tilpasser sig selv:** 5 rigtige i første forsøg giver nyt niveau. 3 opgaver i træk
 med fejl går stille og roligt et niveau ned. Efter to forkerte tryk viser appen det
 rigtige bogstav, så barnet ikke går i stå. Der er stjerner og fejring for hver løst opgave.
 
-**For voksne:** hold tandhjulet nede på forsiden i 1,5 sekund. Her kan man skrive
-barnets navn, vælge STORE/små bogstaver, slå lyd fra, sætte niveauet manuelt og se statistik.
+**For voksne:** hold tandhjulet nede på forsiden i 1,5 sekund. Her kan man skrive ugens ord,
+se runder pr. dag den sidste uge og rigtige i første forsøg pr. område, se de svære ord, sætte
+niveauet manuelt, skrive barnets navn, vælge STORE/små bogstaver og slå lyd fra.
 
 Alt gemmes kun på enheden – ingen login, ingen server, ingen data sendes nogen steder hen.
 
@@ -71,6 +81,19 @@ python3 tools/make_voice.py --ref min-stemme.wav --ref-text "Hej med dig. Nu ska
 Det går hurtigt med et grafikkort. Uden grafikkort tager det cirka et minut pr. klip.
 OmniVoice-modellens vægte er licenseret CC-BY-NC, dvs. kun til ikke-kommerciel brug. Det passer til en
 privat app til familien.
+
+## Kode og tests
+
+- `app/js/data.js` – alt indhold (ord, niveauer, klistermærker, sætninger).
+- `app/js/logic.js` – reglerne uden skærm: opgaver, svarmuligheder, niveauskift, runder,
+  klistermærker, svære ord, ugens ord og indlæsning af gemte data.
+- `app/js/app.js` – skærmene.
+- `tests/` – tests uden afhængigheder, inkl. en golden master for alle opgavetyper. Kør:
+
+```sh
+npm test            # eller: node --test tests/*.test.js
+UPDATE_GOLDEN=1 npm test   # kun efter en bevidst ændring af opgaverne
+```
 
 ## Kør lokalt
 

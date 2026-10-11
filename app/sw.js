@@ -2,7 +2,7 @@
 
 // Gør appen brugbar uden internet. Filerne vises fra cachen med det samme,
 // og opdateres i baggrunden, så en ny version ses næste gang appen åbnes.
-const CACHE = 'stav-og-regn-v3';
+const CACHE = 'stav-og-regn-v4';
 const ASSETS = [
   './',
   'index.html',
