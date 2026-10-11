@@ -13,7 +13,24 @@
   --bad: #e5484d;
   --hint: #ffd43b;
   --radius: 22px;
-  --shadow: 0 6px 0 rgba(0, 0, 0, 0.12);
+  --on-color: #fff;
+  --line: #c9c2ad;
+  --line-soft: #e7e1cf;
+  --input-line: #d8d1bc;
+  --slot-bg: rgba(255, 255, 255, 0.5);
+  --star: #ffc22e;
+  --counted: #fff1b8;
+  --pattern-soft: #f1ebff;
+  --good-dark: #1f9a62;
+  --good-soft: #e6f8ef;
+  --good-soft-strong: #c8f2dc;
+  --danger-soft: #ffe3e3;
+  --danger-ink: #b42318;
+  --focus-ring: rgba(79, 124, 255, 0.5);
+  --focus-ring-soft: rgba(79, 124, 255, 0.35);
+  --shadow-color: rgba(0, 0, 0, 0.12);
+  --shadow-strong-color: rgba(0, 0, 0, 0.18);
+  --shadow: 0 6px 0 var(--shadow-color);
 }
 
 * { box-sizing: border-box; }
@@ -77,17 +94,17 @@ button {
   box-shadow: var(--shadow);
   flex: none;
 }
-.icon-btn:active { transform: translateY(3px); box-shadow: 0 3px 0 rgba(0, 0, 0, 0.12); }
+.icon-btn:active { transform: translateY(3px); box-shadow: 0 3px 0 var(--shadow-color); }
 
 .streak { display: flex; gap: 6px; }
 .dot {
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  background: #e7e1cf;
+  background: var(--line-soft);
   transition: background 0.3s, transform 0.3s;
 }
-.dot.on { background: #ffc22e; transform: scale(1.2); }
+.dot.on { background: var(--star); transform: scale(1.2); }
 
 /* ---------- Forside ---------- */
 
@@ -105,11 +122,11 @@ button {
   align-items: center;
   padding: 14px 16px 16px;
   border-radius: var(--radius);
-  color: #fff;
-  box-shadow: 0 8px 0 rgba(0, 0, 0, 0.18);
+  color: var(--on-color);
+  box-shadow: 0 8px 0 var(--shadow-strong-color);
   transition: transform 0.08s;
 }
-.big-btn:active { transform: translateY(5px); box-shadow: 0 3px 0 rgba(0, 0, 0, 0.18); }
+.big-btn:active { transform: translateY(5px); box-shadow: 0 3px 0 var(--shadow-strong-color); }
 .big-btn.spell { background: var(--spell); }
 .big-btn.math { background: var(--math); }
 .big-btn.pattern { background: var(--pattern); }
@@ -126,13 +143,13 @@ button {
   background: transparent;
   font-size: 1.6rem;
   opacity: 0.5;
-  box-shadow: 0 0 0 0 rgba(79, 124, 255, 0.5);
+  box-shadow: 0 0 0 0 var(--focus-ring);
   transition: box-shadow 0.2s;
   touch-action: none;
 }
 .parent-btn.holding {
   opacity: 1;
-  box-shadow: 0 0 0 14px rgba(79, 124, 255, 0.35);
+  box-shadow: 0 0 0 14px var(--focus-ring-soft);
   transition: box-shadow 1.5s linear;
 }
 .parent-hint { text-align: center; color: var(--muted); margin: 8px 0 0; }
@@ -165,16 +182,16 @@ button {
   width: clamp(40px, 12vw, 60px);
   height: clamp(52px, 15vw, 72px);
   border-radius: 14px;
-  border: 3px dashed #c9c2ad;
+  border: 3px dashed var(--line);
   display: grid;
   place-items: center;
   font-size: clamp(1.8rem, 9vw, 2.6rem);
   font-weight: 800;
-  background: rgba(255, 255, 255, 0.5);
+  background: var(--slot-bg);
 }
-.slot.current { border-color: var(--spell); border-style: solid; background: #fff; }
+.slot.current { border-color: var(--spell); border-style: solid; background: var(--on-color); }
 .slot.given { border-style: solid; border-color: transparent; color: var(--muted); }
-.slot.filled { border-style: solid; border-color: var(--good); background: #e6f8ef; color: var(--ink); }
+.slot.filled { border-style: solid; border-color: var(--good); background: var(--good-soft); color: var(--ink); }
 
 .tiles {
   display: flex;
@@ -195,7 +212,7 @@ button {
 .tile:active { transform: translateY(3px); }
 .no-audio .speak { display: none; }
 .tile.used { visibility: hidden; }
-.tile.right { background: var(--good); color: #fff; }
+.tile.right { background: var(--good); color: var(--on-color); }
 .tile:disabled:not(.used):not(.right) { opacity: 0.35; }
 .tile.hint { animation: glow 0.9s ease-in-out infinite alternate; }
 
@@ -215,7 +232,7 @@ button {
   padding: 2px;
   border-radius: 10px;
 }
-.obj.counted { background: #fff1b8; }
+.obj.counted { background: var(--counted); }
 .obj.crossed { position: relative; }
 .obj.crossed span { opacity: 0.3; }
 .obj.crossed::after {
@@ -259,7 +276,7 @@ button {
 .seq-numbers .seq-item {
   font-weight: 900;
   font-variant-numeric: tabular-nums;
-  background: #f1ebff;
+  background: var(--pattern-soft);
   border-radius: 14px;
   padding: 0 6px;
 }
@@ -268,7 +285,7 @@ button {
   border-radius: 14px;
   color: var(--pattern);
   font-weight: 900;
-  background: #fff;
+  background: var(--on-color);
 }
 
 
@@ -279,17 +296,17 @@ button {
   padding: 0 12px;
   border-radius: 20px;
   background: var(--math);
-  color: #fff;
+  color: var(--on-color);
   font-size: 2.6rem;
   font-weight: 900;
   box-shadow: 0 6px 0 var(--math-dark);
 }
 .choice:active { transform: translateY(4px); box-shadow: 0 2px 0 var(--math-dark); }
-.choice.right { background: var(--good); box-shadow: 0 6px 0 #1f9a62; }
-.choice.wrong { background: #c9c2ad; box-shadow: none; }
+.choice.right { background: var(--good); box-shadow: 0 6px 0 var(--good-dark); }
+.choice.wrong { background: var(--line); box-shadow: none; }
 .choice.choice-emoji { background: var(--card); color: var(--ink); box-shadow: var(--shadow); font-size: 2.8rem; }
-.choice.choice-emoji.right { background: #c8f2dc; box-shadow: 0 6px 0 var(--good); }
-.choice.choice-emoji.wrong { background: #e7e1cf; box-shadow: none; opacity: 0.5; }
+.choice.choice-emoji.right { background: var(--good-soft-strong); box-shadow: 0 6px 0 var(--good); }
+.choice.choice-emoji.wrong { background: var(--line-soft); box-shadow: none; opacity: 0.5; }
 
 .feedback {
   min-height: 3rem;
@@ -340,8 +357,8 @@ button {
   font-weight: 400;
   padding: 12px;
   border-radius: 12px;
-  border: 2px solid #d8d1bc;
-  background: #fff;
+  border: 2px solid var(--input-line);
+  background: var(--on-color);
   user-select: text;
 }
 .field input[type="checkbox"] { width: 28px; height: 28px; }
@@ -354,9 +371,9 @@ button {
   border-radius: 12px;
   background: var(--card);
   font-weight: 700;
-  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.12);
+  box-shadow: 0 3px 0 var(--shadow-color);
 }
-.small-btn.danger { background: #ffe3e3; color: #b42318; }
+.small-btn.danger { background: var(--danger-soft); color: var(--danger-ink); }
 
 @media (prefers-reduced-motion: reduce) {
   .confetti, .shake, .pop, .tile.hint { animation-duration: 0.01s; }
