@@ -19,7 +19,14 @@
           <h1 id="greeting">Hej!</h1>
           <p class="home-sub">Hvad vil du øve?</p>
         </div>
-        <div class="stars-pill" aria-label="Stjerner">⭐ <span data-stars>0</span></div>
+        <div class="home-badges">
+          <div class="stars-pill" aria-label="Stjerner">⭐ <span data-stars>0</span></div>
+          <button class="album-btn" id="go-album" aria-label="Mit album">
+            <span aria-hidden="true">📒</span>
+            <span class="album-count" id="album-count">0</span>
+            <span class="album-new" id="album-new" hidden>NY</span>
+          </button>
+        </div>
       </header>
       <div class="area-grid">
         <button class="area-card spell" id="go-spell">
@@ -59,6 +66,15 @@
       </header>
       <div id="task" class="task"></div>
       <div id="feedback" class="feedback" aria-live="polite"></div>
+    </section>
+
+    <section id="screen-album" class="screen" hidden>
+      <header class="top">
+        <button class="icon-btn" data-home aria-label="Hjem">🏠</button>
+        <h2>Mit album</h2>
+        <div class="stars-pill album-total" id="album-total"></div>
+      </header>
+      <div class="album" id="album"></div>
     </section>
 
     <section id="screen-parent" class="screen" hidden>

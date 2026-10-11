@@ -1,7 +1,7 @@
 'use strict';
 
 (function () {
-  const { WORDS, LETTERS, SPELL_LEVELS, MATH_LEVELS, PATTERN_LEVELS, PATTERN_THEMES, COUNT_ITEMS, PRAISE } = window.DATA;
+  const { WORDS, LETTERS, SPELL_LEVELS, MATH_LEVELS, PATTERN_LEVELS, PATTERN_THEMES, COUNT_ITEMS, PRAISE, STICKERS } = window.DATA;
   const L = window.LOGIC;
   const STORE_KEY = 'stav-og-regn-v1';
   const LEVELS = { spell: SPELL_LEVELS, math: MATH_LEVELS, pattern: PATTERN_LEVELS };
@@ -143,6 +143,7 @@
     }
     if (name === 'home') renderHome();
     if (name === 'parent') renderParent();
+    if (name === 'album') renderAlbum();
   }
 
   // Android-tilbageknappen skal føre hjem i stedet for at lukke appen.
@@ -176,11 +177,14 @@
     }
     $('#parent-hint').hidden = true;
     updateStars();
+    $('#album-count').textContent = state.stickers.length;
+    $('#album-new').hidden = !(state.stickersSeen < state.stickers.length);
   }
 
   $('#go-spell').addEventListener('click', () => startArea('spell'));
   $('#go-math').addEventListener('click', () => startArea('math'));
   $('#go-pattern').addEventListener('click', () => startArea('pattern'));
+  $('#go-album').addEventListener('click', () => open('album'));
 
   function startArea(a) {
     area = a;
@@ -249,6 +253,7 @@
   function showRoundEnd() {
     const r = round;
     L.saveRound(state, r, L.localDate(new Date()));
+    const won = L.awardStickers(rng, state, r, STICKERS).map((id) => STICKERS.find((st) => st.id === id));
     save();
     $('#feedback').textContent = '';
     const name = state.settings.name;
@@ -265,17 +270,33 @@
     home.addEventListener('click', goHome);
     const actions = el('div', 'round-actions');
     actions.append(again, home);
-    box.append(
+    const praiseCol = el('div', 'round-col');
+    const rewardCol = el('div', 'round-col');
+    praiseCol.append(
       el('div', 'round-trophy', '🏆'),
       el('h2', 'round-title', name ? `Flot klaret, ${name}!` : 'Flot klaret!'),
       stars,
       el('p', 'round-sub', `${r.done} opgaver · ${r.firstTry} rigtige i første forsøg`),
-      actions,
     );
+    box.append(praiseCol, rewardCol);
+    if (won.length) {
+      const reveal = el('button', 'sticker-reveal');
+      reveal.setAttribute('aria-label', 'Se albummet');
+      const row = el('div', 'sticker-reveal-row');
+      won.forEach((st) => {
+        const item = el('div', 'sticker-reveal-item');
+        item.append(el('span', 'sticker-big', st.e), el('span', 'sticker-name', st.name));
+        row.append(item);
+      });
+      reveal.append(el('span', 'sticker-reveal-title', won.length > 1 ? 'Perfekt runde! 2 nye klistermærker' : 'Nyt klistermærke!'), row);
+      reveal.addEventListener('click', () => open('album'));
+      rewardCol.append(reveal);
+    }
+    rewardCol.append(actions);
     $('#task').replaceChildren(box);
     sfx('level');
     celebrate(40);
-    say(P.roundDone);
+    say(P.roundDone, ...(won.length ? [P.newSticker, ...won.map((st) => st.name)] : []));
     again.focus();
   }
 
@@ -536,6 +557,51 @@
     });
     root.append(choices);
     say(prompt);
+  }
+
+  // ---------- Album ----------
+
+  function renderAlbum() {
+    const box = $('#album');
+    box.replaceChildren();
+    const owned = new Set(state.stickers);
+    const fresh = new Set(state.stickers.slice(state.stickersSeen || 0));
+    $('#album-total').textContent = `${owned.size} af ${STICKERS.length}`;
+    if (!owned.size) {
+      const empty = el('div', 'album-empty');
+      empty.append(el('div', 'album-empty-icon', '📒'), el('p', null, 'Albummet er tomt. Lav en runde på 10 opgaver, så får du dit første klistermærke!'));
+      box.append(empty);
+    }
+    const themes = Array.from(new Set(STICKERS.map((st) => st.theme)));
+    for (const theme of themes) {
+      const list = STICKERS.filter((st) => st.theme === theme);
+      const got = list.filter((st) => owned.has(st.id)).length;
+      const section = el('section', 'album-theme');
+      section.append(el('h3', null, `${theme} · ${got}/${list.length}`));
+      const grid = el('div', 'album-grid');
+      for (const st of list) {
+        const has = owned.has(st.id);
+        const cell = el('button', 'sticker' + (has ? '' : ' missing') + (fresh.has(st.id) ? ' fresh' : ''));
+        cell.append(el('span', 'sticker-emoji', st.e), el('span', 'sticker-label', has ? st.name : '?'));
+        cell.setAttribute('aria-label', has ? st.name : 'Ikke fundet endnu');
+        if (has) {
+          cell.addEventListener('click', () => {
+            cell.classList.remove('pop');
+            void cell.offsetWidth;
+            cell.classList.add('pop');
+            say(st.name);
+          });
+        } else {
+          cell.disabled = true;
+        }
+        grid.append(cell);
+      }
+      section.append(grid);
+      box.append(section);
+    }
+    // Nye klistermærker er nu set.
+    state.stickersSeen = state.stickers.length;
+    save();
   }
 
   // ---------- Voksen-indstillinger ----------

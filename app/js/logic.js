@@ -37,6 +37,7 @@
       pattern: { level: 1, streak: 0, misses: 0, done: 0 },
       history: [], // afsluttede runder: { date: 'ÅÅÅÅ-MM-DD', area, total, firstTry }
       stickers: [], // id'er på klistermærker i albummet, i den rækkefølge de er vundet
+      stickersSeen: 0, // så mange af stickers er set i albummet (resten vises som nye)
     };
   }
 
@@ -46,6 +47,7 @@
     const s = saved && typeof saved === 'object' ? saved : {};
     const state = { ...d, ...s, settings: { ...d.settings, ...s.settings } };
     state.stickers = Array.isArray(s.stickers) ? Array.from(new Set(s.stickers.filter((x) => typeof x === 'string'))) : [];
+    state.stickersSeen = Math.min(Number.isInteger(s.stickersSeen) ? s.stickersSeen : state.stickers.length, state.stickers.length);
     state.history = Array.isArray(s.history) ? s.history.filter((r) => r && typeof r.date === 'string') : [];
     for (const area of AREAS) {
       state[area] = { ...d[area], ...s[area] };

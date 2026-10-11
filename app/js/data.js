@@ -274,5 +274,6 @@ window.DATA.allPhrases = function () {
     ...Object.values(d.TENS),
     ...d.COUNT_ITEMS.map((it) => `Hvor mange ${it.pl}?`),
     ...d.PRAISE,
+    ...d.STICKERS.map((st) => st.name),
   ]));
 };

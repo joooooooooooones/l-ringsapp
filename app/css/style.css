@@ -422,6 +422,182 @@ button:focus-visible, input:focus-visible {
   to { box-shadow: 0 0 0 8px var(--hint); }
 }
 
+/* ---------- Afslutning på en runde ---------- */
+
+.round-end {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-3);
+  width: min(100%, 520px);
+  padding: var(--space-6) var(--space-5);
+  background: var(--card);
+  border-radius: var(--radius-l);
+  box-shadow: var(--shadow), var(--shadow-lift);
+  text-align: center;
+  animation: pop 0.4s;
+}
+.round-col { display: grid; justify-items: center; gap: var(--space-3); width: 100%; }
+.round-trophy { font-size: 5rem; line-height: 1; }
+.round-title { margin: 0; font-size: var(--text-xl); text-wrap: balance; }
+.round-stars { display: grid; grid-template-columns: repeat(5, auto); justify-content: center; gap: 2px 6px; font-size: 1.9rem; }
+.round-star { animation: pop 0.4s both; }
+.round-star:nth-child(2) { animation-delay: 0.05s; }
+.round-star:nth-child(3) { animation-delay: 0.1s; }
+.round-star:nth-child(4) { animation-delay: 0.15s; }
+.round-star:nth-child(5) { animation-delay: 0.2s; }
+.round-star:nth-child(6) { animation-delay: 0.25s; }
+.round-star:nth-child(7) { animation-delay: 0.3s; }
+.round-star:nth-child(8) { animation-delay: 0.35s; }
+.round-star:nth-child(9) { animation-delay: 0.4s; }
+.round-star:nth-child(10) { animation-delay: 0.45s; }
+.round-sub { margin: 0; color: var(--muted); font-size: var(--text-m); }
+.round-actions { display: grid; gap: var(--space-3); width: 100%; margin-top: var(--space-3); }
+
+.big-action {
+  --c: var(--spell);
+  --c-dark: var(--spell-dark);
+  min-height: 72px;
+  padding: 0 var(--space-5);
+  border-radius: var(--radius);
+  background: var(--c);
+  color: var(--on-color);
+  font-size: 1.7rem;
+  font-weight: 700;
+  box-shadow: 0 6px 0 var(--c-dark);
+}
+.big-action:active { transform: translateY(4px); box-shadow: 0 2px 0 var(--c-dark); }
+.big-action.math { --c: var(--math); --c-dark: var(--math-dark); }
+.big-action.pattern { --c: var(--pattern); --c-dark: var(--pattern-dark); }
+.big-action.words { --c: var(--words); --c-dark: var(--words-dark); }
+.round-home { justify-self: center; min-width: 160px; font-size: var(--text-m); }
+
+/* ---------- Klistermærker og album ---------- */
+
+.home-badges { display: flex; flex-direction: column; align-items: flex-end; gap: var(--space-2); }
+.album-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: 999px;
+  background: var(--card);
+  font-size: 1.4rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  box-shadow: var(--shadow);
+}
+.album-btn:active { transform: translateY(3px); box-shadow: 0 2px 0 var(--shadow-color); }
+.album-new {
+  position: absolute;
+  top: -8px;
+  right: -6px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--spell);
+  color: var(--on-color);
+  font-size: 0.8rem;
+  letter-spacing: 0.04em;
+  animation: pop 0.4s;
+}
+
+.sticker-reveal {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-4);
+  border-radius: var(--radius);
+  background: var(--pattern-soft);
+  border: 3px dashed var(--pattern);
+}
+.sticker-reveal-title { font-size: var(--text-m); font-weight: 700; color: var(--pattern-dark); }
+.sticker-reveal-row { display: flex; gap: var(--space-5); justify-content: center; }
+.sticker-reveal-item { display: grid; justify-items: center; }
+.sticker-big { font-size: 4.2rem; line-height: 1.1; animation: flip-in 0.7s 0.3s both; }
+.sticker-name { font-weight: 700; }
+@keyframes flip-in {
+  0% { transform: rotateY(90deg) scale(0.4); opacity: 0; }
+  60% { transform: rotateY(-15deg) scale(1.2); opacity: 1; }
+  100% { transform: rotateY(0) scale(1); }
+}
+
+.album-total { font-size: 1.1rem; }
+.album { display: grid; gap: var(--space-5); padding: var(--space-3) 0 var(--space-6); }
+.album-empty {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-2);
+  padding: var(--space-5);
+  background: var(--card);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  text-align: center;
+  font-size: var(--text-m);
+}
+.album-empty p { margin: 0; max-width: 32ch; }
+.album-empty-icon { font-size: 3.5rem; }
+.album-theme h3 { margin: 0 0 var(--space-2); font-size: var(--text-m); color: var(--muted); }
+.album-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: var(--space-3); }
+.sticker {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  padding: var(--space-3) var(--space-1) var(--space-2);
+  border-radius: var(--radius-s);
+  background: var(--card);
+  box-shadow: var(--shadow);
+}
+.sticker-emoji { font-size: 2.6rem; line-height: 1.1; }
+.sticker-label { font-size: 0.85rem; font-weight: 700; max-width: 100%; overflow-wrap: anywhere; }
+.sticker.missing { background: var(--line-soft); box-shadow: none; cursor: default; }
+/* Manglende klistermærker vises som silhuet, så man kan se, hvad der er at samle */
+.sticker.missing .sticker-emoji { filter: grayscale(1) brightness(0); opacity: 0.18; }
+.sticker.missing .sticker-label { color: var(--muted); }
+.sticker.fresh { box-shadow: 0 0 0 3px var(--star), var(--shadow); }
+
+/* ---------- Fejring ---------- */
+
+.celebrate { position: fixed; inset: 0; pointer-events: none; overflow: hidden; }
+.confetti {
+  position: absolute;
+  bottom: -60px;
+  animation: rise 1.6s ease-out forwards;
+}
+@keyframes rise {
+  0% { transform: translateY(0) rotate(0); opacity: 1; }
+  100% { transform: translateY(-105vh) rotate(300deg); opacity: 0.2; }
+}
+
+/* ---------- Voksen-side ---------- */
+
+.parent-body { display: grid; gap: var(--space-4); padding: var(--space-3) 0 var(--space-5); user-select: text; }
+.field { display: grid; gap: var(--space-2); font-weight: 700; }
+.field.row { grid-template-columns: 1fr auto; align-items: center; }
+.field input[type="text"] {
+  font: inherit;
+  font-weight: 400;
+  padding: 12px;
+  border-radius: 12px;
+  border: 2px solid var(--input-line);
+  background: var(--card);
+  user-select: text;
+}
+.field input[type="checkbox"] { width: 28px; height: 28px; accent-color: var(--math); }
+.note { margin: 0; font-weight: 400; color: var(--muted); font-size: var(--text-s); }
+.stepper { display: flex; align-items: center; gap: var(--space-3); font-weight: 400; }
+.stepper span { flex: 1; text-align: center; }
+.small-btn {
+  padding: 10px 16px;
+  min-width: 48px;
+  min-height: 44px;
+  border-radius: 12px;
+  background: var(--card);
+  font-weight: 700;
+  box-shadow: 0 3px 0 var(--shadow-color);
+}
+.small-btn.danger { background: var(--danger-soft); color: var(--danger-ink); }
+
 /* ---------- Tablet og store skærme ----------
    Barnet bruger primært tablet: alt bliver større, og forsiden bliver et gitter af kort. */
 
@@ -474,6 +650,12 @@ button:focus-visible, input:focus-visible {
   .choice.choice-emoji { font-size: 3.8rem; }
   .feedback { font-size: 2.6rem; }
   .parent-body { max-width: 640px; margin: 0 auto; width: 100%; }
+  .album-btn { font-size: 1.8rem; padding: 10px 22px; }
+  .home-badges { flex-direction: row; align-items: center; gap: var(--space-3); }
+  .album-grid { grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); }
+  .sticker-emoji { font-size: 3.6rem; }
+  .sticker-label { font-size: 1rem; }
+  .sticker-big { font-size: 5.5rem; }
 }
 
 /* Liggende tablet med lav højde: lidt mindre billede, så alt kan være der uden at scrolle */
@@ -481,97 +663,14 @@ button:focus-visible, input:focus-visible {
   .task { gap: var(--space-4); }
   .picture { font-size: 8rem; padding: 16px 28px; }
   .area-card { min-height: 260px; }
+  /* Liggende: ros til venstre, klistermærke og knapper til højre */
+  .round-end { grid-template-columns: 1fr 1fr; align-items: center; column-gap: var(--space-6); width: min(100%, 900px); padding: var(--space-5) var(--space-6); }
+  .round-trophy { font-size: 4.2rem; }
+  .round-stars { font-size: 1.9rem; }
+  .sticker-reveal { padding: var(--space-3); }
+  .sticker-big { font-size: 4rem; }
+  .round-actions { margin-top: var(--space-1); }
 }
-
-/* ---------- Afslutning på en runde ---------- */
-
-.round-end {
-  display: grid;
-  justify-items: center;
-  gap: var(--space-3);
-  width: min(100%, 520px);
-  padding: var(--space-6) var(--space-5);
-  background: var(--card);
-  border-radius: var(--radius-l);
-  box-shadow: var(--shadow), var(--shadow-lift);
-  text-align: center;
-  animation: pop 0.4s;
-}
-.round-trophy { font-size: 5rem; line-height: 1; }
-.round-title { margin: 0; font-size: var(--text-xl); text-wrap: balance; }
-.round-stars { display: grid; grid-template-columns: repeat(5, auto); justify-content: center; gap: 2px 6px; font-size: 1.9rem; }
-.round-star { animation: pop 0.4s both; }
-.round-star:nth-child(2) { animation-delay: 0.05s; }
-.round-star:nth-child(3) { animation-delay: 0.1s; }
-.round-star:nth-child(4) { animation-delay: 0.15s; }
-.round-star:nth-child(5) { animation-delay: 0.2s; }
-.round-star:nth-child(6) { animation-delay: 0.25s; }
-.round-star:nth-child(7) { animation-delay: 0.3s; }
-.round-star:nth-child(8) { animation-delay: 0.35s; }
-.round-star:nth-child(9) { animation-delay: 0.4s; }
-.round-star:nth-child(10) { animation-delay: 0.45s; }
-.round-sub { margin: 0; color: var(--muted); font-size: var(--text-m); }
-.round-actions { display: grid; gap: var(--space-3); width: 100%; margin-top: var(--space-3); }
-
-.big-action {
-  --c: var(--spell);
-  --c-dark: var(--spell-dark);
-  min-height: 72px;
-  padding: 0 var(--space-5);
-  border-radius: var(--radius);
-  background: var(--c);
-  color: var(--on-color);
-  font-size: 1.7rem;
-  font-weight: 700;
-  box-shadow: 0 6px 0 var(--c-dark);
-}
-.big-action:active { transform: translateY(4px); box-shadow: 0 2px 0 var(--c-dark); }
-.big-action.math { --c: var(--math); --c-dark: var(--math-dark); }
-.big-action.pattern { --c: var(--pattern); --c-dark: var(--pattern-dark); }
-.big-action.words { --c: var(--words); --c-dark: var(--words-dark); }
-.round-home { justify-self: center; min-width: 160px; font-size: var(--text-m); }
-
-/* ---------- Fejring ---------- */
-
-.celebrate { position: fixed; inset: 0; pointer-events: none; overflow: hidden; }
-.confetti {
-  position: absolute;
-  bottom: -60px;
-  animation: rise 1.6s ease-out forwards;
-}
-@keyframes rise {
-  0% { transform: translateY(0) rotate(0); opacity: 1; }
-  100% { transform: translateY(-105vh) rotate(300deg); opacity: 0.2; }
-}
-
-/* ---------- Voksen-side ---------- */
-
-.parent-body { display: grid; gap: var(--space-4); padding: var(--space-3) 0 var(--space-5); user-select: text; }
-.field { display: grid; gap: var(--space-2); font-weight: 700; }
-.field.row { grid-template-columns: 1fr auto; align-items: center; }
-.field input[type="text"] {
-  font: inherit;
-  font-weight: 400;
-  padding: 12px;
-  border-radius: 12px;
-  border: 2px solid var(--input-line);
-  background: var(--card);
-  user-select: text;
-}
-.field input[type="checkbox"] { width: 28px; height: 28px; accent-color: var(--math); }
-.note { margin: 0; font-weight: 400; color: var(--muted); font-size: var(--text-s); }
-.stepper { display: flex; align-items: center; gap: var(--space-3); font-weight: 400; }
-.stepper span { flex: 1; text-align: center; }
-.small-btn {
-  padding: 10px 16px;
-  min-width: 48px;
-  min-height: 44px;
-  border-radius: 12px;
-  background: var(--card);
-  font-weight: 700;
-  box-shadow: 0 3px 0 var(--shadow-color);
-}
-.small-btn.danger { background: var(--danger-soft); color: var(--danger-ink); }
 
 @media (prefers-reduced-motion: reduce) {
   .confetti, .shake, .pop, .tile.hint { animation-duration: 0.01s; }
