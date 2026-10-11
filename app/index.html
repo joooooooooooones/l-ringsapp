@@ -29,6 +29,11 @@
           <span class="big-label">Regne</span>
           <span class="big-sub" id="math-level-label"></span>
         </button>
+        <button class="big-btn pattern" id="go-pattern">
+          <span class="big-emoji">🧩</span>
+          <span class="big-label">Mønstre</span>
+          <span class="big-sub" id="pattern-level-label"></span>
+        </button>
       </div>
       <button id="parent-btn" class="parent-btn" aria-label="Voksen-indstillinger (hold nede)">⚙️</button>
       <p class="parent-hint" id="parent-hint" hidden>Voksne: hold knappen nede</p>
@@ -64,7 +69,7 @@
           <input id="set-sound" type="checkbox">
         </label>
         <div class="field" data-sound-only>
-          <button class="small-btn" id="test-voice" type="button">🔊 Test stemmen</button>
+          <button class="small-btn" id="test-voice" type="button">🔊 Test lyden</button>
           <p class="note" id="voice-status"></p>
         </div>
         <div class="field">
@@ -81,6 +86,14 @@
             <button class="small-btn" type="button" data-step="math" data-dir="-1" aria-label="Lavere">−</button>
             <span id="math-level-set"></span>
             <button class="small-btn" type="button" data-step="math" data-dir="1" aria-label="Højere">+</button>
+          </div>
+        </div>
+        <div class="field">
+          <span>Mønstre-niveau</span>
+          <div class="stepper">
+            <button class="small-btn" type="button" data-step="pattern" data-dir="-1" aria-label="Lavere">−</button>
+            <span id="pattern-level-set"></span>
+            <button class="small-btn" type="button" data-step="pattern" data-dir="1" aria-label="Højere">+</button>
           </div>
         </div>
         <p class="note">Niveauet skifter også af sig selv: 5 rigtige i træk giver nyt niveau, og 3 svære opgaver i træk går et niveau ned.</p>

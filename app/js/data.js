@@ -96,6 +96,26 @@ window.DATA = {
     { name: 'Plus og minus til 20', type: 'mix', max: 20, pictures: false, choices: 4 },
   ],
 
+  // Mønstre: først figurer der gentager sig, så talrækker.
+  // units: bogstaverne viser hvordan mønsteret gentager sig (AAB = 🐶🐶🐱🐶🐶🐱 …).
+  PATTERN_LEVELS: [
+    { name: 'Mønstre med 2 ting', type: 'shape', units: ['AB'] },
+    { name: 'Sværere mønstre', type: 'shape', units: ['AAB', 'ABB', 'AABB'] },
+    { name: 'Mønstre med 3 ting', type: 'shape', units: ['ABC', 'ABBC', 'AABC'] },
+    { name: 'Tal der vokser', type: 'number', steps: [1], shown: 4 },
+    { name: 'Tæl frem og tilbage', type: 'number', steps: [1, -1, 2], shown: 4 },
+    { name: 'Spring og huller', type: 'number', steps: [2, -1, -2, 5, 10], shown: 5, missingInside: true },
+  ],
+
+  PATTERN_THEMES: [
+    ['🔴', '🔵', '🟡', '🟢', '🟣'],
+    ['🐶', '🐱', '🐭', '🐰', '🐸'],
+    ['🍎', '🍌', '🍇', '🍓', '🍐'],
+    ['🚗', '🚌', '🚲', '🚀', '🚂'],
+    ['⭐', '🌙', '☀️', '☁️', '⚡'],
+    ['🔺', '🟦', '🟠', '💚', '🔶'],
+  ],
+
   COUNT_ITEMS: [
     { e: '🍎', pl: 'æbler' },
     { e: '🐟', pl: 'fisk' },
@@ -108,4 +128,59 @@ window.DATA = {
   ],
 
   PRAISE: ['Godt klaret!', 'Super!', 'Flot!', 'Sejt!', 'Rigtigt!', 'Du er dygtig!', 'Hurra!'],
+
+  // Faste sætninger, der læses op. Hver tekst får sin egen lydfil i app/audio/.
+  PHRASES: {
+    firstLetter: 'Hvad starter ordet med?',
+    spell: 'Stav ordet.',
+    whatIs: 'Hvad er',
+    plus: 'plus',
+    minus: 'minus',
+    tryCounting: 'Prøv at tælle.',
+    newLevel: 'Nyt niveau!',
+    hello: 'Hej! Nu skal vi lære at stave og regne.',
+    patternNext: 'Hvad kommer så?',
+    patternMissing: 'Hvad mangler?',
+  },
+
+  // Sådan siges bogstaverne på dansk.
+  LETTER_NAMES: {
+    a: 'a', b: 'be', c: 'se', d: 'de', e: 'e', f: 'æf', g: 'ge', h: 'hå', i: 'i',
+    j: 'jåd', k: 'kå', l: 'æl', m: 'æm', n: 'æn', o: 'o', p: 'pe', r: 'ær', s: 'æs',
+    t: 'te', u: 'u', v: 've', y: 'y', z: 'sæt', æ: 'æ', ø: 'ø', å: 'å',
+  },
+
+  NUMBER_WORDS: [
+    'nul', 'en', 'to', 'tre', 'fire', 'fem', 'seks', 'syv', 'otte', 'ni', 'ti',
+    'elleve', 'tolv', 'tretten', 'fjorten', 'femten', 'seksten', 'sytten', 'atten', 'nitten', 'tyve',
+  ],
+  TENS: {
+    30: 'tredive', 40: 'fyrre', 50: 'halvtreds', 60: 'tres', 70: 'halvfjerds', 80: 'firs', 90: 'halvfems', 100: 'hundrede',
+  },
+};
+
+// Filnavn for en sætnings lydfil, f.eks. 'Prøv at tælle.' -> 'proev-at-taelle'.
+window.DATA.audioKey = function (text) {
+  return text
+    .toLowerCase()
+    .replace(/æ/g, 'ae')
+    .replace(/ø/g, 'oe')
+    .replace(/å/g, 'aa')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+};
+
+// Alle tekster appen kan finde på at læse op. Bruges af tools/make-audio.
+window.DATA.allPhrases = function () {
+  const d = window.DATA;
+  const words = Object.values(d.WORDS).flat().map((w) => w.word);
+  return Array.from(new Set([
+    ...words,
+    ...Object.values(d.PHRASES),
+    ...Object.values(d.LETTER_NAMES),
+    ...d.NUMBER_WORDS,
+    ...Object.values(d.TENS),
+    ...d.COUNT_ITEMS.map((it) => `Hvor mange ${it.pl}?`),
+    ...d.PRAISE,
+  ]));
 };

@@ -1,13 +1,12 @@
 'use strict';
 
 (function () {
-  const { WORDS, LETTERS, SPELL_LEVELS, MATH_LEVELS, COUNT_ITEMS, PRAISE } = window.DATA;
+  const { WORDS, LETTERS, SPELL_LEVELS, MATH_LEVELS, PATTERN_LEVELS, PATTERN_THEMES, COUNT_ITEMS, PRAISE } = window.DATA;
   const STORE_KEY = 'stav-og-regn-v1';
   const LEVEL_UP_AFTER = 5; // rigtige i første forsøg i træk
   const LEVEL_DOWN_AFTER = 3; // opgaver med fejl i træk
-  const LEVELS = { spell: SPELL_LEVELS, math: MATH_LEVELS };
-  // Lyd er slået helt fra indtil videre. Sæt til true for at få oplæsning og lydeffekter igen.
-  const SOUND_ENABLED = false;
+  const LEVELS = { spell: SPELL_LEVELS, math: MATH_LEVELS, pattern: PATTERN_LEVELS };
+  const AREAS = Object.keys(LEVELS);
 
   // ---------- Gemt tilstand (kun på enheden, ingen server) ----------
 
@@ -17,6 +16,7 @@
       settings: { uppercase: true, sound: true, name: '' },
       spell: { level: 1, streak: 0, misses: 0, done: 0 },
       math: { level: 1, streak: 0, misses: 0, done: 0 },
+      pattern: { level: 1, streak: 0, misses: 0, done: 0 },
     };
   }
 
@@ -31,6 +31,7 @@
           settings: { ...d.settings, ...s.settings },
           spell: { ...d.spell, ...s.spell },
           math: { ...d.math, ...s.math },
+          pattern: { ...d.pattern, ...s.pattern },
         };
       }
     } catch (e) { /* tom eller ødelagt lagring: start forfra */ }
@@ -42,7 +43,7 @@
   }
 
   let state = load();
-  for (const area of ['spell', 'math']) {
+  for (const area of AREAS) {
     state[area].level = Math.min(Math.max(1, state[area].level), LEVELS[area].length);
   }
 
@@ -70,51 +71,96 @@
 
   const fmt = (letter) => (state.settings.uppercase ? letter.toLocaleUpperCase('da') : letter);
 
-  // ---------- Lyd: oplæsning og små lydeffekter ----------
+  // ---------- Lyd: oplæsning og lydeffekter ----------
+  //
+  // Al lyd er færdige lydfiler i app/audio/, lavet på forhånd med tools/make-audio
+  // (OmniVoice). Mangler en fil, er der bare stille: vi bruger ikke telefonens robotstemme.
 
-  const hasSpeech = 'speechSynthesis' in window;
-  let danishVoice = null;
+  const audio = {
+    ctx: null,
+    available: new Set(), // filnavne fra audio/manifest.json
+    buffers: new Map(),
+    playing: [],
+    token: 0,
+  };
 
-  function pickVoice() {
-    if (!hasSpeech) return;
-    danishVoice = speechSynthesis.getVoices().find((v) => (v.lang || '').toLowerCase().startsWith('da')) || null;
-  }
-  if (hasSpeech) {
-    pickVoice();
-    speechSynthesis.onvoiceschanged = pickVoice;
+  fetch('audio/manifest.json')
+    .then((r) => (r.ok ? r.json() : { clips: [] }))
+    .then((m) => {
+      audio.available = new Set(m.clips);
+      setAudioUi(audio.available.size > 0);
+    })
+    .catch(() => {});
+
+  // Lydknapper og lyd-indstillinger vises kun, når der findes lydfiler.
+  function setAudioUi(on) {
+    document.body.classList.toggle('no-audio', !on);
+    document.querySelectorAll('[data-sound-only]').forEach((x) => { x.hidden = !on; });
   }
 
-  function say(text) {
-    if (!SOUND_ENABLED || !state.settings.sound || !hasSpeech) return;
-    speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(text);
-    u.lang = 'da-DK';
-    if (danishVoice) u.voice = danishVoice;
-    u.rate = 0.85;
-    speechSynthesis.speak(u);
+  function audioCtx() {
+    if (!audio.ctx) {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return null;
+      audio.ctx = new Ctx();
+    }
+    if (audio.ctx.state === 'suspended') audio.ctx.resume();
+    return audio.ctx;
   }
 
-  let audioCtx = null;
-  function beep(kind) {
-    if (!SOUND_ENABLED || !state.settings.sound) return;
-    try {
-      audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
-      const notes = { good: [660, 880], level: [523, 659, 784, 1047], bad: [200] }[kind];
-      notes.forEach((freq, i) => {
-        const o = audioCtx.createOscillator();
-        const g = audioCtx.createGain();
-        o.type = kind === 'bad' ? 'triangle' : 'sine';
-        o.frequency.value = freq;
-        const t = audioCtx.currentTime + i * 0.12;
-        g.gain.setValueAtTime(0.0001, t);
-        g.gain.exponentialRampToValueAtTime(0.2, t + 0.02);
-        g.gain.exponentialRampToValueAtTime(0.0001, t + 0.25);
-        o.connect(g).connect(audioCtx.destination);
-        o.start(t);
-        o.stop(t + 0.3);
-      });
-    } catch (e) { /* ingen lyd tilgængelig */ }
+  function loadClip(key) {
+    if (!audio.buffers.has(key)) {
+      const ctx = audioCtx();
+      audio.buffers.set(key, fetch(`audio/${key}.mp3`)
+        .then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(key))))
+        .then((b) => ctx.decodeAudioData(b))
+        .catch(() => null));
+    }
+    return audio.buffers.get(key);
   }
+
+  function stopSpeech() {
+    audio.token++;
+    audio.playing.forEach((src) => { try { src.stop(); } catch (e) { /* allerede stoppet */ } });
+    audio.playing = [];
+  }
+
+  function playBuffers(buffers, track) {
+    const ctx = audio.ctx;
+    let t = ctx.currentTime + 0.03;
+    for (const b of buffers) {
+      if (!b) continue;
+      const src = ctx.createBufferSource();
+      src.buffer = b;
+      src.connect(ctx.destination);
+      src.start(t);
+      if (track) audio.playing.push(src);
+      t += b.duration + 0.05;
+    }
+    return t - ctx.currentTime; // sekunder til det hele er sagt
+  }
+
+  // Læser en eller flere tekster op efter hinanden, f.eks. say('kat', 'Stav ordet.').
+  async function say(...texts) {
+    stopSpeech();
+    if (!state.settings.sound || !audioCtx()) return 0;
+    const my = audio.token;
+    const keys = texts.filter(Boolean).map(window.DATA.audioKey).filter((k) => audio.available.has(k));
+    const buffers = await Promise.all(keys.map(loadClip));
+    if (my !== audio.token) return 0;
+    return playBuffers(buffers, true);
+  }
+
+  // Korte lydeffekter: good, bad, level, tap. Afbryder ikke oplæsningen.
+  async function sfx(name) {
+    const key = 'sfx-' + name;
+    if (!state.settings.sound || !audio.available.has(key) || !audioCtx()) return;
+    playBuffers([await loadClip(key)], false);
+  }
+
+  const sayNumber = (n) => window.DATA.NUMBER_WORDS[n] || window.DATA.TENS[n];
+  const sayLetter = (l) => window.DATA.LETTER_NAMES[l] || l;
+  const P = window.DATA.PHRASES;
 
   // ---------- Skærme og navigation ----------
 
@@ -126,7 +172,7 @@
     document.querySelectorAll('.screen').forEach((s) => { s.hidden = s.id !== 'screen-' + name; });
     if (name !== 'play') {
       clearTimeout(nextTimer);
-      if (hasSpeech) speechSynthesis.cancel();
+      stopSpeech();
     }
     if (name === 'home') renderHome();
     if (name === 'parent') renderParent();
@@ -157,12 +203,14 @@
     $('#greeting').textContent = state.settings.name ? `Hej ${state.settings.name}!` : 'Hej!';
     $('#spell-level-label').textContent = levelLabel('spell');
     $('#math-level-label').textContent = levelLabel('math');
+    $('#pattern-level-label').textContent = levelLabel('pattern');
     $('#parent-hint').hidden = true;
     updateStars();
   }
 
   $('#go-spell').addEventListener('click', () => startArea('spell'));
   $('#go-math').addEventListener('click', () => startArea('math'));
+  $('#go-pattern').addEventListener('click', () => startArea('pattern'));
 
   function startArea(a) {
     area = a;
@@ -177,7 +225,8 @@
     $('#feedback').textContent = '';
     renderStreak();
     if (area === 'spell') spellTask();
-    else mathTask();
+    else if (area === 'math') mathTask();
+    else patternTask();
   }
 
   function renderStreak() {
@@ -218,37 +267,39 @@
     return change;
   }
 
-  function praise() {
-    const p = pick(PRAISE);
-    const name = state.settings.name;
-    return name && Math.random() < 0.4 ? `${p.replace(/!$/, '')}, ${name}!` : p;
-  }
-
-  function finishTask(spokenPrefix) {
-    task.done = true;
+  // spoken: det der skal siges før rosen, f.eks. ordet der lige er stavet.
+  function finishTask(spoken) {
+    const done = task;
+    done.done = true;
     state.stars++;
-    const change = recordResult(area, task.mistakes === 0);
+    const change = recordResult(area, done.mistakes === 0);
     updateStars();
     renderStreak();
-    let msg;
+    let msg, praise;
     if (change > 0) {
+      praise = P.newLevel;
       msg = 'Nyt niveau! 🎉';
-      beep('level');
+      sfx('level');
       celebrate(30);
-      say((spokenPrefix ? spokenPrefix + '. ' : '') + 'Nyt niveau!');
     } else {
-      msg = praise();
-      beep('good');
+      praise = pick(PRAISE);
+      const name = state.settings.name;
+      msg = name && Math.random() < 0.4 ? `${praise.replace(/!$/, '')}, ${name}!` : praise;
+      sfx('good');
       celebrate(12);
-      say((spokenPrefix ? spokenPrefix + '. ' : '') + msg);
     }
     $('#feedback').textContent = msg;
-    nextTimer = setTimeout(nextTask, change > 0 ? 2800 : 1900);
+    // Vent til oplæsningen er færdig, før næste opgave kommer.
+    const minWait = change > 0 ? 2800 : 1900;
+    say(...spoken, praise).then((secs) => {
+      if (task !== done || $('#screen-play').hidden) return;
+      nextTimer = setTimeout(nextTask, Math.max(minWait, secs * 1000 + 600));
+    });
   }
 
   function wrong(btn) {
     task.mistakes++;
-    beep('bad');
+    sfx('bad');
     btn.classList.remove('shake');
     void btn.offsetWidth; // genstart animationen
     btn.classList.add('shake');
@@ -267,11 +318,10 @@
     }
   }
 
-  function speakerButton(text) {
+  function speakerButton(...texts) {
     const b = el('button', 'icon-btn speak', '🔊');
     b.setAttribute('aria-label', 'Hør igen');
-    b.hidden = !SOUND_ENABLED;
-    b.addEventListener('click', () => say(text));
+    b.addEventListener('click', () => say(...texts));
     return b;
   }
 
@@ -322,7 +372,7 @@
         t.addEventListener('click', () => onFirstLetter(t, l, slots));
         tiles.append(t);
       });
-      say(`Hvad starter ${w.word} med?`);
+      say(w.word, P.firstLetter);
     } else {
       slots.children[0].classList.add('current');
       const distractors = shuffle(LETTERS.filter((l) => !letters.includes(l))).slice(0, lvl.extra);
@@ -332,7 +382,7 @@
         t.addEventListener('click', () => onBuildLetter(t, l, slots, tiles));
         tiles.append(t);
       });
-      say(`Stav til ${w.word}`);
+      say(w.word, P.spell);
     }
   }
 
@@ -344,7 +394,7 @@
       slot.classList.remove('current');
       slot.classList.add('filled', 'pop');
       tile.classList.add('right');
-      finishTask(task.word);
+      finishTask([task.word]);
     } else {
       wrong(tile);
       tile.disabled = true;
@@ -366,10 +416,10 @@
       task.pos++;
       task.wrongHere = 0;
       if (task.pos === task.letters.length) {
-        finishTask(task.word);
+        finishTask([task.word]);
       } else {
         slots.children[task.pos].classList.add('current');
-        say(letter);
+        say(sayLetter(letter));
       }
     } else {
       wrong(tile);
@@ -384,15 +434,15 @@
 
   // ---------- Regne ----------
 
-  function makeChoices(answer, min, max, n) {
+  function makeChoices(answer, min, max, n, unit = 1) {
     const set = new Set([answer]);
     for (const o of shuffle([-1, 1, -2, 2, -3, 3])) {
       if (set.size >= n) break;
-      const v = answer + o;
+      const v = answer + o * unit;
       if (v >= min && v <= max) set.add(v);
     }
     let guard = 0;
-    while (set.size < n && guard++ < 100) set.add(rand(min, max));
+    while (set.size < n && guard++ < 100) set.add(min + unit * rand(0, Math.floor((max - min) / unit)));
     return Array.from(set).sort((a, b) => a - b);
   }
 
@@ -410,7 +460,7 @@
           if (o.classList.contains('counted')) return;
           o.classList.add('counted');
           counter.n++;
-          say(String(counter.n));
+          say(sayNumber(counter.n));
         });
       }
       g.append(o);
@@ -423,21 +473,19 @@
     const type = lvl.type === 'mix' ? pick(['add', 'sub']) : lvl.type;
     const item = pick(COUNT_ITEMS);
     const counter = { n: 0 };
-    let answer, question, spoken, solved, visual = null;
+    let answer, question, spoken, visual = null;
 
     if (type === 'count') {
       answer = rand(1, lvl.max);
       question = 'Hvor mange?';
-      spoken = `Hvor mange ${item.pl}?`;
-      solved = `${answer} ${item.pl}`;
+      spoken = [`Hvor mange ${item.pl}?`];
       visual = group(item.e, answer, Infinity, counter);
     } else if (type === 'add') {
       const a = rand(1, lvl.max - 1);
       const b = rand(1, lvl.max - a);
       answer = a + b;
       question = `${a} + ${b} = ?`;
-      spoken = `Hvad er ${a} plus ${b}?`;
-      solved = `${a} plus ${b} er ${answer}`;
+      spoken = [P.whatIs, sayNumber(a), P.plus, sayNumber(b)];
       if (lvl.pictures) {
         visual = el('div', 'visual-row');
         visual.append(group(item.e, a, Infinity, counter), el('span', 'op', '+'), group(item.e, b, Infinity, counter));
@@ -447,8 +495,7 @@
       const b = rand(1, a);
       answer = a - b;
       question = `${a} − ${b} = ?`;
-      spoken = `Hvad er ${a} minus ${b}?`;
-      solved = `${a} minus ${b} er ${answer}`;
+      spoken = [P.whatIs, sayNumber(a), P.minus, sayNumber(b)];
       if (lvl.pictures) visual = group(item.e, a, a - b, counter);
     }
 
@@ -462,7 +509,7 @@
       root.append(wrap);
     }
     const qRow = el('div', 'question-row');
-    qRow.append(el('div', 'question', question), speakerButton(spoken));
+    qRow.append(el('div', 'question', question), speakerButton(...spoken));
     root.append(qRow);
 
     const choices = el('div', 'choices');
@@ -473,18 +520,100 @@
         if (task.done || b.disabled) return;
         if (v === answer) {
           b.classList.add('right');
-          finishTask(solved);
+          finishTask([sayNumber(answer)]);
         } else {
           wrong(b);
           b.classList.add('wrong');
           b.disabled = true;
-          if (visual) say('Prøv at tælle');
+          if (visual) say(P.tryCounting);
         }
       });
       choices.append(b);
     });
     root.append(choices);
-    say(spoken);
+    say(...spoken);
+  }
+
+  // ---------- Mønstre ----------
+
+  function shapePattern(lvl) {
+    const unit = Array.from(pick(lvl.units)); // f.eks. ['A', 'A', 'B']
+    const kinds = Array.from(new Set(unit));
+    const symbols = shuffle(pick(PATTERN_THEMES)).slice(0, kinds.length + 1);
+    const symbolOf = Object.fromEntries(kinds.map((k, i) => [k, symbols[i]]));
+    // Mindst to hele gentagelser, så mønsteret kan ses.
+    const length = unit.length * 2 + rand(0, unit.length - 1);
+    const seq = Array.from({ length: length + 1 }, (_, i) => symbolOf[unit[i % unit.length]]);
+    const answer = seq[length];
+    const others = shuffle(symbols.filter((x) => x !== answer)).slice(0, 2);
+    return { seq, missing: length, answer, choices: shuffle([answer, ...others]), unitLength: unit.length };
+  }
+
+  function numberPattern(lvl) {
+    const step = pick(lvl.steps);
+    const size = Math.abs(step);
+    const max = size === 10 ? 100 : 20;
+    const n = Math.min(lvl.shown, Math.floor(max / size) - 1);
+    const span = size * n;
+    // Startværdien vælges, så hele rækken holder sig mellem 0 og max.
+    // Spring på 2, 5 og 10 starter i et tal, man "tæller med" (0, 2, 4 … / 5, 10 …).
+    const startSlot = size === 1 ? rand(0, max - span) : size * rand(0, Math.floor((max - span) / size));
+    const start = step > 0 ? startSlot : startSlot + span;
+    const seq = Array.from({ length: n + 1 }, (_, i) => start + i * step);
+    const missing = lvl.missingInside && Math.random() < 0.5 ? rand(1, n - 1) : n;
+    const answer = seq[missing];
+    return { seq, missing, answer, choices: makeChoices(answer, 0, max, 3, size >= 5 ? size : 1), step };
+  }
+
+  function patternTask() {
+    const lvl = PATTERN_LEVELS[state.pattern.level - 1];
+    const isNumber = lvl.type === 'number';
+    const p = isNumber ? numberPattern(lvl) : shapePattern(lvl);
+    task = { answer: p.answer, mistakes: 0, done: false };
+
+    const prompt = p.missing === p.seq.length - 1 ? P.patternNext : P.patternMissing;
+    const root = $('#task');
+    root.replaceChildren();
+
+    const row = el('div', 'seq' + (isNumber ? ' seq-numbers' : ''));
+    let group = null;
+    const cells = p.seq.map((v, i) => {
+      // Figurmønstre samles i gentagelser, så rækken kun knækker mellem dem.
+      if (!group || (p.unitLength && i % p.unitLength === 0)) {
+        group = el('div', 'seq-group');
+        row.append(group);
+      }
+      const c = el('div', 'seq-item', i === p.missing ? '?' : String(v));
+      if (i === p.missing) c.classList.add('seq-q');
+      group.append(c);
+      return c;
+    });
+    const qRow = el('div', 'question-row');
+    qRow.append(el('div', 'question question-small', prompt), speakerButton(prompt));
+    root.append(row, qRow);
+
+    const choices = el('div', 'choices');
+    p.choices.forEach((v) => {
+      const b = el('button', isNumber ? 'choice' : 'choice choice-emoji', String(v));
+      b.addEventListener('click', () => {
+        if (task.done || b.disabled) return;
+        if (v === p.answer) {
+          b.classList.add('right');
+          const cell = cells[p.missing];
+          cell.textContent = String(v);
+          cell.classList.remove('seq-q');
+          cell.classList.add('pop');
+          finishTask(isNumber ? [sayNumber(v)] : []);
+        } else {
+          wrong(b);
+          b.classList.add('wrong');
+          b.disabled = true;
+        }
+      });
+      choices.append(b);
+    });
+    root.append(choices);
+    say(prompt);
   }
 
   // ---------- Voksen-indstillinger ----------
@@ -517,14 +646,10 @@
     $('#set-sound').checked = state.settings.sound;
     $('#spell-level-set').textContent = levelLabel('spell');
     $('#math-level-set').textContent = levelLabel('math');
+    $('#pattern-level-set').textContent = levelLabel('pattern');
     $('#stats').textContent =
-      `${state.stars} stjerner i alt · ${state.spell.done} staveopgaver · ${state.math.done} regneopgaver`;
-    pickVoice();
-    $('#voice-status').textContent = !hasSpeech
-      ? 'Denne browser kan ikke læse op.'
-      : danishVoice
-        ? `Dansk stemme fundet (${danishVoice.name}).`
-        : 'Ingen dansk stemme fundet endnu. Tryk "Test stemmen". Hvis den taler forkert sprog: Android-indstillinger → Tekst-til-tale → Google → installér dansk.';
+      `${state.stars} stjerner i alt · ${state.spell.done} staveopgaver · ${state.math.done} regneopgaver · ${state.pattern.done} mønstre`;
+    $('#voice-status').textContent = `${audio.available.size} lydklip installeret.`;
   }
 
   $('#set-name').addEventListener('input', (e) => {
@@ -540,8 +665,7 @@
     save();
   });
   $('#test-voice').addEventListener('click', () => {
-    say(`Hej ${state.settings.name || 'med dig'}! Nu skal vi lære at stave og regne.`);
-    setTimeout(renderParent, 500);
+    say(P.hello);
   });
   document.querySelectorAll('[data-step]').forEach((b) => b.addEventListener('click', () => {
     const a = b.dataset.step;
@@ -574,12 +698,12 @@
   });
 
   document.addEventListener('visibilitychange', () => {
-    if (document.hidden && hasSpeech) speechSynthesis.cancel();
+    if (document.hidden) stopSpeech();
   });
 
   // ---------- Start ----------
 
-  document.querySelectorAll('[data-sound-only]').forEach((x) => { x.hidden = !SOUND_ENABLED; });
+  setAudioUi(false);
   show('home');
 
   if ('serviceWorker' in navigator) {

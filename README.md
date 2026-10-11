@@ -1,6 +1,6 @@
 # Stav og Regn
 
-En lille lære-app til et barn på ca. 6 år: **stave** og **regne** på barnets eget niveau.
+En lille lære-app til et barn på ca. 6 år: **stave**, **regne** og **mønstre** på barnets eget niveau.
 Den kører som en web-app (PWA), der installeres på Android-telefonen/tabletten som en
 almindelig app, virker uden internet og koster ikke noget at hoste.
 
@@ -15,6 +15,11 @@ almindelig app, virker uden internet og koster ikke noget at hoste.
 **Regne** (med billeder man kan trykke på for at tælle højt)
 1. Tæl til 5 · 2. Tæl til 10 · 3. Plus til 5 · 4. Plus til 10 · 5. Minus til 10 ·
 6. Plus til 20 · 7. Plus og minus til 20
+
+**Mønstre** (find det næste i rækken)
+1. Mønstre med 2 ting (🔴🔵🔴🔵 ?) · 2. Sværere mønstre (🐶🐶🐱 …) · 3. Mønstre med 3 ting ·
+4. Tal der vokser (3 4 5 6 ?) · 5. Tæl frem og tilbage (7 6 5 4 ?) ·
+6. Spring og huller (2 4 _ 8 · 10 20 30 ? · 5 10 15 ?)
 
 **Tilpasser sig selv:** 5 rigtige i første forsøg giver nyt niveau. 3 opgaver i træk
 med fejl går stille og roligt et niveau ned. Efter to forkerte tryk viser appen det
@@ -42,12 +47,30 @@ i stedet koble repoet til **Cloudflare Pages** eller **Netlify** (begge gratis) 
 2. Tryk på menuen (⋮) → **Installér app** / **Føj til startskærm**.
 3. Appen får sit eget ikon og åbner i fuld skærm – også uden internet.
 
-**Lyd er slået fra indtil videre.** Sæt `SOUND_ENABLED = true` øverst i `app/js/app.js`
-for at få oplæsning og lydeffekter igen. Så vises også lyd-indstillingerne på voksen-siden.
+## Lyd og oplæsning
 
-**Oplæsning (når lyden er slået til):** appen bruger telefonens egen tekst-til-tale. Hvis den taler engelsk:
-Android-indstillinger → Tekst-til-tale → Google → installér **dansk** stemme.
-Brug "Test stemmen" på voksen-siden for at tjekke.
+Appen bruger **færdige lydfiler** i `app/audio/` i stedet for telefonens robotstemme. Det betyder
+naturlig dansk udtale, og lyden virker også uden internet. Mangler en fil, er der bare stille.
+
+- **Lydeffekter** (`sfx-*.mp3`) laves med `python3 tools/make_sfx.py`.
+- **Oplæsning** laves med `tools/make_voice.py` og [OmniVoice](https://github.com/k2-fsa/OmniVoice),
+  som også er motoren i [VoiceStudio](https://github.com/debpalash/VoiceStudio). Scriptet læser alle
+  tekster fra `app/js/data.js`, så nye ord automatisk kommer med. Allerede lavede filer springes over.
+
+**Med din egen stemme (anbefales).** Optag 5-10 sekunders tydelig tale, f.eks. "Hej med dig. Nu skal vi
+øve os på at stave og regne.", og lav alle klip igen:
+
+```sh
+# Med VoiceStudio-appen kørende (lav først en stemmeprofil, f.eks. "Far"):
+python3 tools/make_voice.py --voicestudio --voice "Far" --force
+
+# Eller direkte med OmniVoice (pip install torch torchaudio omnivoice):
+python3 tools/make_voice.py --ref min-stemme.wav --ref-text "Hej med dig. Nu skal vi øve os på at stave og regne." --force
+```
+
+Det går hurtigt med et grafikkort. Uden grafikkort tager det cirka et minut pr. klip.
+OmniVoice-modellens vægte er licenseret CC-BY-NC, dvs. kun til ikke-kommerciel brug. Det passer til en
+privat app til familien.
 
 ## Kør lokalt
 
@@ -61,6 +84,8 @@ python3 -m http.server 8000
 
 Alt indhold ligger i `app/js/data.js`. Et nyt ord er bare en linje, f.eks.
 `{ word: 'hund', emoji: '🐶' }` i den rigtige længde-gruppe. Vælg helst lydrette ord.
+
+Kør derefter `tools/make_voice.py`, så de nye ord også bliver læst op.
 
 Når filer ændres, så hæv versionsnummeret i `CACHE` i `app/sw.js`, hvis du vil være sikker
 på at alle får den nye version med det samme (ellers kommer den ved næste åbning).

@@ -2,7 +2,7 @@
 
 // Gør appen brugbar uden internet. Filerne vises fra cachen med det samme,
 // og opdateres i baggrunden, så en ny version ses næste gang appen åbnes.
-const CACHE = 'stav-og-regn-v1';
+const CACHE = 'stav-og-regn-v2';
 const ASSETS = [
   './',
   'index.html',
@@ -15,8 +15,24 @@ const ASSETS = [
   'icons/icon-maskable-512.png',
 ];
 
+// Lydfilerne står i audio/manifest.json og gemmes også, så oplæsningen virker offline.
+async function audioFiles() {
+  try {
+    const res = await fetch('audio/manifest.json', { cache: 'no-store' });
+    const { clips } = await res.json();
+    return ['audio/manifest.json', ...clips.map((k) => `audio/${k}.mp3`)];
+  } catch (e) {
+    return [];
+  }
+}
+
 self.addEventListener('install', (event) => {
-  event.waitUntil(caches.open(CACHE).then((c) => c.addAll(ASSETS)).then(() => self.skipWaiting()));
+  event.waitUntil((async () => {
+    const cache = await caches.open(CACHE);
+    await cache.addAll(ASSETS);
+    await Promise.all((await audioFiles()).map((f) => cache.add(f).catch(() => {})));
+    await self.skipWaiting();
+  })());
 });
 
 self.addEventListener('activate', (event) => {
