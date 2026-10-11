@@ -127,7 +127,7 @@ def main():
                     help='stemmebeskrivelse når der ikke er en --ref')
     ap.add_argument('--speed', type=float, default=0.9, help='taletempo (lidt langsomt for børn)')
     ap.add_argument('--steps', type=int, default=32, help='OmniVoice-kvalitet (flere = bedre, langsommere)')
-    ap.add_argument('--batch', type=int, default=6, help='antal klip der laves ad gangen')
+    ap.add_argument('--batch', type=int, default=1, help='antal klip ad gangen (1 er hurtigst på CPU)')
     ap.add_argument('--force', action='store_true', help='lav alle filer igen')
     ap.add_argument('--only', nargs='*', help='lav kun disse tekster')
     args = ap.parse_args()
