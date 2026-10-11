@@ -1,0 +1,8 @@
+{
+  "name": "stav-og-regn",
+  "private": true,
+  "description": "Lære-app til stavning, regning og mønstre",
+  "scripts": {
+    "test": "node --test tests/*.test.js"
+  }
+}
