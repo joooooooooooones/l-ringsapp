@@ -156,7 +156,10 @@
       clearTaskTimers();
       stopSpeech();
     }
-    if (name === 'home') renderHome();
+    if (name === 'home') {
+      renderHome();
+      if (typeof reloadIfHome === 'function') setTimeout(reloadIfHome, 0);
+    }
     if (name === 'home' || name === 'parent') updateInstallUi();
     if (name === 'parent') renderParent();
     if (name === 'album') renderAlbum();
@@ -987,7 +990,21 @@
   setAudioUi(false);
   show('home');
 
+  // Ny version: når en ny service worker har overtaget, genindlæses appen, så snart barnet
+  // er på forsiden (aldrig midt i en opgave). Ellers ville en installeret app blive på den
+  // gamle version, til den blev lukket helt.
+  let updateReady = false;
+  function reloadIfHome() {
+    if (updateReady && !$('#screen-home').hidden) location.reload();
+  }
+
   if ('serviceWorker' in navigator) {
+    const hadController = !!navigator.serviceWorker.controller; // false ved allerførste besøg
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (!hadController) return;
+      updateReady = true;
+      reloadIfHome();
+    });
     window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
   }
 })();
