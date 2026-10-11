@@ -598,6 +598,58 @@ button:focus-visible, input:focus-visible {
 }
 .small-btn.danger { background: var(--danger-soft); color: var(--danger-ink); }
 
+/* Paneler på voksen-siden */
+.top-spacer { width: 56px; }
+.panel {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  background: var(--card);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+.panel h3 { margin: 0; font-size: var(--text-m); }
+
+.week { display: grid; grid-template-columns: repeat(7, 1fr); gap: var(--space-2); height: 130px; }
+.week-day { display: grid; grid-template-rows: 18px 1fr 20px; justify-items: center; gap: 2px; min-width: 0; }
+.week-count { font-size: 0.85rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.week-track { width: 100%; max-width: 34px; display: flex; align-items: flex-end; background: var(--bg); border-radius: 8px; overflow: hidden; }
+.week-bar { width: 100%; min-height: 0; background: var(--math); border-radius: 8px 8px 0 0; }
+.week-day.today .week-bar { background: var(--spell); }
+.week-label { font-size: 0.8rem; color: var(--muted); white-space: nowrap; }
+.week-day.today .week-label { color: var(--ink); font-weight: 700; }
+
+.area-stats { display: grid; gap: var(--space-2); }
+.area-stat-head { margin-top: var(--space-1); }
+.area-stat {
+  --c: var(--spell);
+  display: grid;
+  grid-template-columns: 5.5rem 4.5rem 1fr 3rem;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-s);
+}
+.area-stat.math { --c: var(--math); }
+.area-stat.pattern { --c: var(--pattern); }
+.area-stat.words { --c: var(--words); }
+.area-stat-name { font-weight: 700; }
+.area-stat-rounds { color: var(--muted); }
+.area-stat-pct { text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
+.meter { height: 10px; border-radius: 5px; background: var(--line-soft); overflow: hidden; }
+.meter-fill { height: 100%; background: var(--c); border-radius: 5px; }
+
+.chips { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: var(--spell-soft);
+  font-size: var(--text-m);
+}
+.chip-count { font-size: 0.8rem; color: var(--spell-dark); }
+
 /* ---------- Tablet og store skærme ----------
    Barnet bruger primært tablet: alt bliver større, og forsiden bliver et gitter af kort. */
 

@@ -223,6 +223,7 @@
     const done = task;
     done.done = true;
     state.stars++;
+    if (area === 'spell') L.recordWord(state, done.word, done.mistakes === 0);
     const change = recordResult(area, done.mistakes === 0);
     const roundDone = L.roundStep(round, done.mistakes === 0);
     updateStars();
@@ -334,7 +335,7 @@
 
   function spellTask() {
     const lvl = SPELL_LEVELS[state.spell.level - 1];
-    const w = L.pickWord(rng, lvl.pool.flatMap((p) => WORDS[p]), recentWords);
+    const w = L.pickWord(rng, lvl.pool.flatMap((p) => WORDS[p]), recentWords, state.wordStats);
     const t = L.spellTask(rng, lvl, w, LETTERS);
     const letters = t.letters;
     task = { word: w.word, letters, mistakes: 0, pos: 0, wrongHere: 0, done: false };
@@ -635,9 +636,59 @@
     $('#spell-level-set').textContent = levelLabel('spell');
     $('#math-level-set').textContent = levelLabel('math');
     $('#pattern-level-set').textContent = levelLabel('pattern');
+    renderWeek();
     $('#stats').textContent =
-      `${state.stars} stjerner i alt · ${state.spell.done} staveopgaver · ${state.math.done} regneopgaver · ${state.pattern.done} mønstre`;
+      `I alt: ${state.stars} stjerner · ${state.spell.done} staveopgaver · ${state.math.done} regneopgaver · ${state.pattern.done} mønstre · ${state.stickers.length} klistermærker`;
+    const hard = L.hardWords(state);
+    const chips = $('#hard-words');
+    chips.replaceChildren(...hard.slice(0, 24).map((h) => {
+      const c = el('span', 'chip');
+      c.append(el('strong', null, h.word), el('span', 'chip-count', `${h.misses} fejl`));
+      return c;
+    }));
+    if (!hard.length) chips.append(el('p', 'note', 'Ingen svære ord lige nu. 🎉'));
     $('#voice-status').textContent = `${audio.available.size} lydklip installeret.`;
+  }
+
+  const AREA_NAMES = { spell: 'Stave', math: 'Regne', pattern: 'Mønstre', words: 'Ugens ord' };
+  const DAY_NAMES = ['søn', 'man', 'tir', 'ons', 'tor', 'fre', 'lør'];
+
+  // Søjler for runder pr. dag de sidste 7 dage + rigtige i første forsøg pr. område.
+  function renderWeek() {
+    const today = new Date();
+    const w = L.weekSummary(state.history, today);
+    const max = Math.max(1, ...w.days.map((d) => d.rounds));
+    const week = $('#week');
+    week.setAttribute('aria-label', 'Runder pr. dag: ' + w.days.map((d) => `${d.date} ${d.rounds}`).join(', '));
+    week.replaceChildren(...w.days.map((d, i) => {
+      const col = el('div', 'week-day' + (i === 6 ? ' today' : ''));
+      const bar = el('div', 'week-bar');
+      bar.style.height = `${Math.round((d.rounds / max) * 100)}%`;
+      const [y, m, day] = d.date.split('-').map(Number);
+      const label = i === 6 ? 'i dag' : DAY_NAMES[new Date(y, m - 1, day).getDay()];
+      col.append(el('span', 'week-count', d.rounds ? String(d.rounds) : ''), el('div', 'week-track'), el('span', 'week-label', label));
+      col.querySelector('.week-track').append(bar);
+      return col;
+    }));
+    const stats = $('#area-stats');
+    const rows = Object.entries(w.areas);
+    stats.replaceChildren(...rows.map(([a, s]) => {
+      const pct = Math.round((s.firstTry / s.tasks) * 100);
+      const row = el('div', `area-stat ${a}`);
+      const meter = el('div', 'meter');
+      const fill = el('div', 'meter-fill');
+      fill.style.width = `${pct}%`;
+      meter.append(fill);
+      row.append(
+        el('span', 'area-stat-name', AREA_NAMES[a] || a),
+        el('span', 'area-stat-rounds', `${s.rounds} ${s.rounds === 1 ? 'runde' : 'runder'}`),
+        meter,
+        el('span', 'area-stat-pct', `${pct} %`),
+      );
+      return row;
+    }));
+    if (!rows.length) stats.append(el('p', 'note', 'Ingen afsluttede runder de sidste 7 dage. En runde er 10 opgaver.'));
+    else stats.prepend(el('p', 'note area-stat-head', 'Rigtige i første forsøg'));
   }
 
   $('#set-name').addEventListener('input', (e) => {
