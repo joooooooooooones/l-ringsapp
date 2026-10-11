@@ -157,15 +157,11 @@ button:focus-visible, input:focus-visible {
 }
 .icon-btn:active { transform: translateY(3px); box-shadow: 0 2px 0 var(--shadow-color); }
 
-.streak { display: flex; gap: 6px; }
-.dot {
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  background: var(--line-soft);
-  transition: background 0.3s, transform 0.3s;
-}
-.dot.on { background: var(--star); transform: scale(1.2); }
+
+/* Fremdrift i runden: ét felt pr. opgave */
+.round-bar { display: flex; gap: 4px; flex: 1; max-width: 360px; }
+.seg { flex: 1; height: 14px; border-radius: 7px; background: var(--line-soft); transition: background 0.3s; }
+.seg.on { background: var(--star); }
 
 /* ---------- Forside ---------- */
 
@@ -437,7 +433,10 @@ button:focus-visible, input:focus-visible {
   .stars-pill { font-size: 1.8rem; padding: 10px 22px; }
   .icon-btn { width: 68px; height: 68px; font-size: 2.1rem; }
   .top { min-height: 72px; }
-  .dot { width: 20px; height: 20px; }
+  .seg { height: 18px; }
+  .round-end { width: min(100%, 600px); padding: var(--space-6); }
+  .round-trophy { font-size: 7rem; }
+  .round-stars { font-size: 2.6rem; }
 
   .area-grid { grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: var(--space-5); }
   .area-card {
@@ -483,6 +482,54 @@ button:focus-visible, input:focus-visible {
   .picture { font-size: 8rem; padding: 16px 28px; }
   .area-card { min-height: 260px; }
 }
+
+/* ---------- Afslutning på en runde ---------- */
+
+.round-end {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-3);
+  width: min(100%, 520px);
+  padding: var(--space-6) var(--space-5);
+  background: var(--card);
+  border-radius: var(--radius-l);
+  box-shadow: var(--shadow), var(--shadow-lift);
+  text-align: center;
+  animation: pop 0.4s;
+}
+.round-trophy { font-size: 5rem; line-height: 1; }
+.round-title { margin: 0; font-size: var(--text-xl); text-wrap: balance; }
+.round-stars { display: grid; grid-template-columns: repeat(5, auto); justify-content: center; gap: 2px 6px; font-size: 1.9rem; }
+.round-star { animation: pop 0.4s both; }
+.round-star:nth-child(2) { animation-delay: 0.05s; }
+.round-star:nth-child(3) { animation-delay: 0.1s; }
+.round-star:nth-child(4) { animation-delay: 0.15s; }
+.round-star:nth-child(5) { animation-delay: 0.2s; }
+.round-star:nth-child(6) { animation-delay: 0.25s; }
+.round-star:nth-child(7) { animation-delay: 0.3s; }
+.round-star:nth-child(8) { animation-delay: 0.35s; }
+.round-star:nth-child(9) { animation-delay: 0.4s; }
+.round-star:nth-child(10) { animation-delay: 0.45s; }
+.round-sub { margin: 0; color: var(--muted); font-size: var(--text-m); }
+.round-actions { display: grid; gap: var(--space-3); width: 100%; margin-top: var(--space-3); }
+
+.big-action {
+  --c: var(--spell);
+  --c-dark: var(--spell-dark);
+  min-height: 72px;
+  padding: 0 var(--space-5);
+  border-radius: var(--radius);
+  background: var(--c);
+  color: var(--on-color);
+  font-size: 1.7rem;
+  font-weight: 700;
+  box-shadow: 0 6px 0 var(--c-dark);
+}
+.big-action:active { transform: translateY(4px); box-shadow: 0 2px 0 var(--c-dark); }
+.big-action.math { --c: var(--math); --c-dark: var(--math-dark); }
+.big-action.pattern { --c: var(--pattern); --c-dark: var(--pattern-dark); }
+.big-action.words { --c: var(--words); --c-dark: var(--words-dark); }
+.round-home { justify-self: center; min-width: 160px; font-size: var(--text-m); }
 
 /* ---------- Fejring ---------- */
 

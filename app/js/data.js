@@ -175,6 +175,7 @@ window.DATA = {
     hello: 'Hej! Nu skal vi lære at stave og regne.',
     patternNext: 'Hvad kommer så?',
     patternMissing: 'Hvad mangler?',
+    roundDone: 'Godt gået! Du har lavet ti opgaver.',
   },
 
   // Sådan siges bogstaverne på dansk.

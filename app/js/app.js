@@ -4,7 +4,6 @@
   const { WORDS, LETTERS, SPELL_LEVELS, MATH_LEVELS, PATTERN_LEVELS, PATTERN_THEMES, COUNT_ITEMS, PRAISE } = window.DATA;
   const L = window.LOGIC;
   const STORE_KEY = 'stav-og-regn-v1';
-  const { LEVEL_UP_AFTER } = L;
   const LEVELS = { spell: SPELL_LEVELS, math: MATH_LEVELS, pattern: PATTERN_LEVELS };
   const LEVEL_COUNTS = { spell: SPELL_LEVELS.length, math: MATH_LEVELS.length, pattern: PATTERN_LEVELS.length };
 
@@ -133,6 +132,7 @@
 
   let area = null; // 'spell' eller 'math'
   let task = null;
+  let round = null; // den igangværende runde på 10 opgaver
   let nextTimer = null;
 
   function show(name) {
@@ -184,6 +184,7 @@
 
   function startArea(a) {
     area = a;
+    round = L.newRound(a);
     open('play');
     nextTask();
   }
@@ -193,21 +194,17 @@
   function nextTask() {
     clearTimeout(nextTimer);
     $('#feedback').textContent = '';
-    renderStreak();
+    renderRound();
     if (area === 'spell') spellTask();
     else if (area === 'math') mathTask();
     else patternTask();
   }
 
-  function renderStreak() {
-    const box = $('#streak');
-    box.replaceChildren();
-    const p = state[area];
-    const atMax = p.level >= LEVELS[area].length;
-    const filled = atMax ? Math.min(p.streak, LEVEL_UP_AFTER) : p.streak;
-    for (let i = 0; i < LEVEL_UP_AFTER; i++) {
-      box.append(el('span', i < filled ? 'dot on' : 'dot'));
-    }
+  // Fremdriftslinje øverst: ét felt pr. opgave i runden.
+  function renderRound() {
+    const bar = $('#round');
+    bar.replaceChildren(...Array.from({ length: L.ROUND_LENGTH }, (_, i) => el('span', i < round.done ? 'seg on' : 'seg')));
+    bar.setAttribute('aria-label', `Opgave ${Math.min(round.done + 1, L.ROUND_LENGTH)} af ${L.ROUND_LENGTH}`);
   }
 
   // Returnerer +1 ved nyt niveau, -1 ved lavere niveau, ellers 0.
@@ -223,8 +220,9 @@
     done.done = true;
     state.stars++;
     const change = recordResult(area, done.mistakes === 0);
+    const roundDone = L.roundStep(round, done.mistakes === 0);
     updateStars();
-    renderStreak();
+    renderRound();
     let msg, praise;
     if (change > 0) {
       praise = P.newLevel;
@@ -243,8 +241,42 @@
     const minWait = change > 0 ? 2800 : 1900;
     say(...spoken, praise).then((secs) => {
       if (task !== done || $('#screen-play').hidden) return;
-      nextTimer = setTimeout(nextTask, Math.max(minWait, secs * 1000 + 600));
+      nextTimer = setTimeout(roundDone ? showRoundEnd : nextTask, Math.max(minWait, secs * 1000 + 600));
     });
+  }
+
+  // Afslutning på en runde: ros, hvad der er lavet, og to tydelige valg.
+  function showRoundEnd() {
+    const r = round;
+    L.saveRound(state, r, L.localDate(new Date()));
+    save();
+    $('#feedback').textContent = '';
+    const name = state.settings.name;
+    const box = el('div', 'round-end');
+    const stars = el('div', 'round-stars');
+    stars.setAttribute('aria-label', `${r.done} stjerner`);
+    for (let i = 0; i < r.done; i++) stars.append(el('span', 'round-star', '⭐'));
+    const again = el('button', `big-action ${r.area}`, 'Én runde mere');
+    again.addEventListener('click', () => {
+      round = L.newRound(r.area);
+      nextTask();
+    });
+    const home = el('button', 'small-btn round-home', '🏠 Hjem');
+    home.addEventListener('click', goHome);
+    const actions = el('div', 'round-actions');
+    actions.append(again, home);
+    box.append(
+      el('div', 'round-trophy', '🏆'),
+      el('h2', 'round-title', name ? `Flot klaret, ${name}!` : 'Flot klaret!'),
+      stars,
+      el('p', 'round-sub', `${r.done} opgaver · ${r.firstTry} rigtige i første forsøg`),
+      actions,
+    );
+    $('#task').replaceChildren(box);
+    sfx('level');
+    celebrate(40);
+    say(P.roundDone);
+    again.focus();
   }
 
   function wrong(btn) {
