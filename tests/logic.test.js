@@ -10,7 +10,8 @@ const GOLDEN = path.join(__dirname, 'golden', 'logic.json');
 
 test('golden master: opgaver er uændrede (UPDATE_GOLDEN=1 for at opdatere efter en erklæret ændring)', () => {
   const now = generate();
-  if (process.env.UPDATE_GOLDEN || !fs.existsSync(GOLDEN)) fs.writeFileSync(GOLDEN, JSON.stringify(now, null, 1) + '\n');
+  if (process.env.UPDATE_GOLDEN) fs.writeFileSync(GOLDEN, JSON.stringify(now, null, 1) + '\n');
+  assert.ok(fs.existsSync(GOLDEN), 'golden-filen mangler – kør med UPDATE_GOLDEN=1 efter en erklæret ændring');
   assert.deepEqual(now, JSON.parse(fs.readFileSync(GOLDEN, 'utf8')));
 });
 
@@ -265,4 +266,41 @@ test('ugens ord: brikkerne kan danne ordet, også med bogstaver uden for den fas
   const t = L.spellTask(rng, { mode: 'build', extra: 3 }, { word: 'zoo' }, DATA.LETTERS);
   assert.deepEqual([...t.tiles].filter((l) => 'zo'.includes(l)).sort(), ['o', 'o', 'z']);
   assert.equal(t.tiles.length, 6);
+});
+
+test('afslut opgave: den 10. opgave gemmer runde og klistermærke med det samme', () => {
+  const state = L.normalizeState(null, { spell: 4, math: 7, pattern: 6 });
+  const round = L.newRound('math');
+  const opts = { area: 'math', round, firstTry: true, levelCount: 7, date: '2026-10-11', rng: seeded(2), catalog: DATA.STICKERS };
+  for (let i = 0; i < 9; i++) assert.equal(L.completeTask(state, opts).roundDone, false);
+  const last = L.completeTask(state, opts);
+  assert.equal(last.roundDone, true);
+  assert.equal(state.history.length, 1);
+  assert.equal(last.won.length, 2, 'perfekt runde');
+  assert.deepEqual(state.stickers, last.won);
+  assert.equal(state.stars, 10);
+  assert.equal(state.math.level, 3, 'to niveauskift efter 10 rigtige i træk');
+});
+
+test('afslut opgave: ugens ord har ingen niveauer, men tæller stjerner og ordstatistik', () => {
+  const state = L.normalizeState(null, null);
+  const round = L.newRound('words');
+  const r = L.completeTask(state, { area: 'words', round, word: 'skole', firstTry: false, levelCount: 0, date: '2026-10-11', rng: seeded(1), catalog: DATA.STICKERS });
+  assert.equal(r.change, 0);
+  assert.equal(state.stars, 1);
+  assert.deepEqual(state.wordStats.skole, { seen: 1, misses: 1, okInRow: 0 });
+});
+
+test('svære ord: "constructor" og andre indbyggede navne er almindelige ord', () => {
+  const state = L.normalizeState(null, null);
+  L.recordWord(state, 'constructor', false);
+  L.recordWord(state, 'tostring', false);
+  assert.deepEqual(state.wordStats.constructor, { seen: 1, misses: 1, okInRow: 0 });
+  assert.equal(Object.seen, undefined, 'Object er urørt');
+  assert.deepEqual(L.hardWords(state).map((h) => h.word).sort(), ['constructor', 'tostring']);
+});
+
+test('svære ord: kun ord der kan komme lige nu, når der gives en liste', () => {
+  const state = L.normalizeState({ wordStats: { fisk: { seen: 1, misses: 1, okInRow: 0 }, kat: { seen: 1, misses: 1, okInRow: 0 } } }, null);
+  assert.deepEqual(L.hardWords(state, new Set(['kat', 'sol'])).map((h) => h.word), ['kat']);
 });

@@ -142,8 +142,12 @@
   const HARD_WORD_CHANCE = 0.35; // så ofte vælges et svært ord, når der findes et
   const HARD_UNTIL_OK = 2; // et ord er svært, til det er stavet rigtigt så mange gange i træk
 
+  // Egen-egenskab, så et ord som "constructor" ikke rammer Object.prototype.
+  const statOf = (stats, word) => (stats && Object.prototype.hasOwnProperty.call(stats, word) ? stats[word] : undefined);
+
   function recordWord(state, word, firstTry) {
-    const st = state.wordStats[word] || (state.wordStats[word] = { seen: 0, misses: 0, okInRow: 0 });
+    let st = statOf(state.wordStats, word);
+    if (!st) st = state.wordStats[word] = { seen: 0, misses: 0, okInRow: 0 };
     st.seen++;
     if (firstTry) st.okInRow++;
     else {
@@ -154,12 +158,30 @@
 
   const isHard = (st) => !!st && st.misses > 0 && st.okInRow < HARD_UNTIL_OK;
 
-  // De svære ord, flest fejl først.
-  function hardWords(state) {
+  // De svære ord, flest fejl først. practicable (valgfri): kun ord der faktisk kan komme lige nu.
+  function hardWords(state, practicable) {
     return Object.entries(state.wordStats)
-      .filter(([, st]) => isHard(st))
+      .filter(([word, st]) => isHard(st) && (!practicable || practicable.has(word)))
       .sort((a, b) => b[1].misses - a[1].misses || a[0].localeCompare(b[0], 'da'))
       .map(([word, st]) => ({ word, ...st }));
+  }
+
+  // ---------- Afslut en opgave ----------
+
+  // Alt der skal ske, når en opgave er løst – samlet ét sted og gemt med det samme,
+  // så intet går tabt, hvis barnet forlader skærmen lige bagefter.
+  // Returnerer { change (niveauskift), roundDone, won (nye klistermærke-id'er) }.
+  function completeTask(state, { area, round, word, firstTry, levelCount, date, rng, catalog }) {
+    state.stars++;
+    if (word) recordWord(state, word, firstTry);
+    const change = levelCount ? recordResult(state[area], levelCount, firstTry) : 0;
+    const roundDone = roundStep(round, firstTry);
+    let won = [];
+    if (roundDone) {
+      saveRound(state, round, date);
+      won = awardStickers(rng, state, round, catalog);
+    }
+    return { change, roundDone, won };
   }
 
   // ---------- Overblik ----------
@@ -222,7 +244,7 @@
     // Få ord (f.eks. ugens ord): undgå i det mindste at vise samme ord to gange i træk.
     if (!candidates.length) candidates = words.filter((w) => w.word !== recent[recent.length - 1]);
     if (!candidates.length) candidates = words;
-    const hard = stats ? candidates.filter((w) => isHard(stats[w.word])) : [];
+    const hard = stats ? candidates.filter((w) => isHard(statOf(stats, w.word))) : [];
     if (hard.length && rng() < HARD_WORD_CHANCE) candidates = hard;
     const w = pick(rng, candidates);
     recent.push(w.word);
@@ -318,7 +340,7 @@
   return {
     LEVEL_UP_AFTER, LEVEL_DOWN_AFTER, AREAS, ROUND_LENGTH, HISTORY_MAX,
     newRound, roundStep, saveRound, localDate, awardStickers,
-    HARD_WORD_CHANCE, HARD_UNTIL_OK, recordWord, hardWords, weekSummary,
+    HARD_WORD_CHANCE, HARD_UNTIL_OK, recordWord, hardWords, weekSummary, completeTask,
     CUSTOM_WORD_MAX, parseCustomWord, addCustomWord, removeCustomWord,
     rand, pick, shuffle,
     defaultState, normalizeState, recordResult,
