@@ -358,7 +358,9 @@
     const slots = el('div', 'slots');
     letters.forEach(() => slots.append(el('div', 'slot')));
     const tiles = el('div', 'tiles');
-    root.append(pictureRow, slots, tiles);
+    // Kort, synlig instruktion – til forælderen der læser med, og når lyden er slået fra.
+    const prompt = el('p', 'task-prompt', lvl.mode === 'first' ? 'Hvilket bogstav starter ordet med?' : 'Stav ordet');
+    root.append(pictureRow, prompt, slots, tiles);
 
     if (lvl.mode === 'first') {
       slots.children[0].textContent = '?';
@@ -559,7 +561,7 @@
       root.append(wrap);
     }
     const qRow = el('div', 'question-row');
-    qRow.append(el('div', 'question', question), speakerButton(...spoken));
+    qRow.append(el('div', type === 'count' ? 'question question-small' : 'question', question), speakerButton(...spoken));
     root.append(qRow);
 
     const choices = el('div', 'choices');
