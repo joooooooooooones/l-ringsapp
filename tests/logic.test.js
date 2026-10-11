@@ -130,3 +130,28 @@ test('gemt tilstand: ældre data kan åbnes, og ødelagte værdier rettes', () =
   assert.equal(L.normalizeState(null, counts).stars, 0);
   assert.equal(L.normalizeState('vrøvl', counts).math.level, 1);
 });
+
+test('runde: 10 opgaver, tæller rigtige i første forsøg og gemmes i historikken', () => {
+  const state = L.normalizeState(null, { spell: 4, math: 7, pattern: 6 });
+  const round = L.newRound('math');
+  const results = [true, false, true, true, true, false, true, true, true, true];
+  const finished = results.map((ok) => L.roundStep(round, ok));
+  assert.deepEqual(finished, [false, false, false, false, false, false, false, false, false, true]);
+  assert.equal(L.ROUND_LENGTH, 10);
+  const saved = L.saveRound(state, round, '2026-10-11');
+  assert.deepEqual(saved, { date: '2026-10-11', area: 'math', total: 10, firstTry: 8 });
+  assert.equal(state.history.length, 1);
+});
+
+test('runde: historikken holdes under loftet, og ødelagt historik ryddes', () => {
+  const state = L.normalizeState({ history: [{ date: '2026-01-01', area: 'spell', total: 10, firstTry: 5 }, null, 'x'] }, null);
+  assert.equal(state.history.length, 1, 'ugyldige poster fjernes');
+  for (let i = 0; i < L.HISTORY_MAX + 5; i++) L.saveRound(state, { area: 'spell', done: 10, firstTry: 10 }, '2026-10-11');
+  assert.equal(state.history.length, L.HISTORY_MAX);
+  assert.equal(L.normalizeState({ history: 'vrøvl' }, null).history.length, 0);
+});
+
+test('lokal dato: ÅÅÅÅ-MM-DD efter lokal tid', () => {
+  assert.equal(L.localDate(new Date(2026, 0, 5, 23, 30)), '2026-01-05');
+  assert.equal(L.localDate(new Date(2026, 11, 31, 0, 1)), '2026-12-31');
+});

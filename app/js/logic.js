@@ -11,6 +11,8 @@
   const LEVEL_UP_AFTER = 5; // rigtige i første forsøg i træk
   const LEVEL_DOWN_AFTER = 3; // opgaver med fejl i træk
   const AREAS = ['spell', 'math', 'pattern'];
+  const ROUND_LENGTH = 10; // opgaver i én runde
+  const HISTORY_MAX = 300; // så mange afsluttede runder gemmes
 
   const rand = (rng, min, max) => Math.floor(rng() * (max - min + 1)) + min;
   const pick = (rng, arr) => arr[Math.floor(rng() * arr.length)];
@@ -33,6 +35,7 @@
       spell: { level: 1, streak: 0, misses: 0, done: 0 },
       math: { level: 1, streak: 0, misses: 0, done: 0 },
       pattern: { level: 1, streak: 0, misses: 0, done: 0 },
+      history: [], // afsluttede runder: { date: 'ÅÅÅÅ-MM-DD', area, total, firstTry }
     };
   }
 
@@ -41,6 +44,7 @@
     const d = defaultState();
     const s = saved && typeof saved === 'object' ? saved : {};
     const state = { ...d, ...s, settings: { ...d.settings, ...s.settings } };
+    state.history = Array.isArray(s.history) ? s.history.filter((r) => r && typeof r.date === 'string') : [];
     for (const area of AREAS) {
       state[area] = { ...d[area], ...s[area] };
       const max = levelCounts ? levelCounts[area] : Infinity;
@@ -73,6 +77,32 @@
       }
     }
     return 0;
+  }
+
+  // ---------- Runder ----------
+
+  function newRound(area) {
+    return { area, done: 0, firstTry: 0 };
+  }
+
+  // Tæller én løst opgave med i runden. Returnerer true, når runden er færdig.
+  function roundStep(round, firstTry) {
+    round.done++;
+    if (firstTry) round.firstTry++;
+    return round.done >= ROUND_LENGTH;
+  }
+
+  // Gemmer en afsluttet runde i historikken (de nyeste HISTORY_MAX).
+  function saveRound(state, round, date) {
+    state.history.push({ date, area: round.area, total: round.done, firstTry: round.firstTry });
+    if (state.history.length > HISTORY_MAX) state.history.splice(0, state.history.length - HISTORY_MAX);
+    return state.history[state.history.length - 1];
+  }
+
+  // Lokal dato som ÅÅÅÅ-MM-DD (ikke UTC, så en runde om aftenen tæller på den rigtige dag).
+  function localDate(d) {
+    const p = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
   }
 
   // ---------- Stave ----------
@@ -173,7 +203,8 @@
   }
 
   return {
-    LEVEL_UP_AFTER, LEVEL_DOWN_AFTER, AREAS,
+    LEVEL_UP_AFTER, LEVEL_DOWN_AFTER, AREAS, ROUND_LENGTH, HISTORY_MAX,
+    newRound, roundStep, saveRound, localDate,
     rand, pick, shuffle,
     defaultState, normalizeState, recordResult,
     pickWord, spellTask, makeChoices, mathTask, patternTask,
