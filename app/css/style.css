@@ -44,7 +44,7 @@ button {
 }
 
 .screen { min-height: calc(100vh - 32px); display: flex; flex-direction: column; }
-.screen[hidden] { display: none; }
+[hidden] { display: none !important; }
 
 /* ---------- Top-linje ---------- */
 

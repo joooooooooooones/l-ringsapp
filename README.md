@@ -42,7 +42,10 @@ i stedet koble repoet til **Cloudflare Pages** eller **Netlify** (begge gratis) 
 2. Tryk på menuen (⋮) → **Installér app** / **Føj til startskærm**.
 3. Appen får sit eget ikon og åbner i fuld skærm – også uden internet.
 
-**Oplæsning:** appen bruger telefonens egen tekst-til-tale. Hvis den taler engelsk:
+**Lyd er slået fra indtil videre.** Sæt `SOUND_ENABLED = true` øverst i `app/js/app.js`
+for at få oplæsning og lydeffekter igen. Så vises også lyd-indstillingerne på voksen-siden.
+
+**Oplæsning (når lyden er slået til):** appen bruger telefonens egen tekst-til-tale. Hvis den taler engelsk:
 Android-indstillinger → Tekst-til-tale → Google → installér **dansk** stemme.
 Brug "Test stemmen" på voksen-siden for at tjekke.
 

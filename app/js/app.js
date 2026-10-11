@@ -6,6 +6,8 @@
   const LEVEL_UP_AFTER = 5; // rigtige i første forsøg i træk
   const LEVEL_DOWN_AFTER = 3; // opgaver med fejl i træk
   const LEVELS = { spell: SPELL_LEVELS, math: MATH_LEVELS };
+  // Lyd er slået helt fra indtil videre. Sæt til true for at få oplæsning og lydeffekter igen.
+  const SOUND_ENABLED = false;
 
   // ---------- Gemt tilstand (kun på enheden, ingen server) ----------
 
@@ -83,7 +85,7 @@
   }
 
   function say(text) {
-    if (!state.settings.sound || !hasSpeech) return;
+    if (!SOUND_ENABLED || !state.settings.sound || !hasSpeech) return;
     speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(text);
     u.lang = 'da-DK';
@@ -94,7 +96,7 @@
 
   let audioCtx = null;
   function beep(kind) {
-    if (!state.settings.sound) return;
+    if (!SOUND_ENABLED || !state.settings.sound) return;
     try {
       audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
       const notes = { good: [660, 880], level: [523, 659, 784, 1047], bad: [200] }[kind];
@@ -268,6 +270,7 @@
   function speakerButton(text) {
     const b = el('button', 'icon-btn speak', '🔊');
     b.setAttribute('aria-label', 'Hør igen');
+    b.hidden = !SOUND_ENABLED;
     b.addEventListener('click', () => say(text));
     return b;
   }
@@ -576,6 +579,7 @@
 
   // ---------- Start ----------
 
+  document.querySelectorAll('[data-sound-only]').forEach((x) => { x.hidden = !SOUND_ENABLED; });
   show('home');
 
   if ('serviceWorker' in navigator) {
