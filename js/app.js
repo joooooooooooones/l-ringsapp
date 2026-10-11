@@ -1,41 +1,18 @@
 'use strict';
 
 (function () {
-  const { WORDS, LETTERS, SPELL_LEVELS, MATH_LEVELS, PATTERN_LEVELS, PATTERN_THEMES, COUNT_ITEMS, PRAISE } = window.DATA;
+  const { WORDS, LETTERS, SPELL_LEVELS, MATH_LEVELS, PATTERN_LEVELS, PATTERN_THEMES, COUNT_ITEMS, PRAISE, STICKERS } = window.DATA;
+  const L = window.LOGIC;
   const STORE_KEY = 'stav-og-regn-v1';
-  const LEVEL_UP_AFTER = 5; // rigtige i første forsøg i træk
-  const LEVEL_DOWN_AFTER = 3; // opgaver med fejl i træk
   const LEVELS = { spell: SPELL_LEVELS, math: MATH_LEVELS, pattern: PATTERN_LEVELS };
-  const AREAS = Object.keys(LEVELS);
+  const LEVEL_COUNTS = { spell: SPELL_LEVELS.length, math: MATH_LEVELS.length, pattern: PATTERN_LEVELS.length };
 
   // ---------- Gemt tilstand (kun på enheden, ingen server) ----------
 
-  function defaultState() {
-    return {
-      stars: 0,
-      settings: { uppercase: true, sound: true, name: '' },
-      spell: { level: 1, streak: 0, misses: 0, done: 0 },
-      math: { level: 1, streak: 0, misses: 0, done: 0 },
-      pattern: { level: 1, streak: 0, misses: 0, done: 0 },
-    };
-  }
-
   function load() {
-    const d = defaultState();
-    try {
-      const s = JSON.parse(localStorage.getItem(STORE_KEY));
-      if (s) {
-        return {
-          ...d,
-          ...s,
-          settings: { ...d.settings, ...s.settings },
-          spell: { ...d.spell, ...s.spell },
-          math: { ...d.math, ...s.math },
-          pattern: { ...d.pattern, ...s.pattern },
-        };
-      }
-    } catch (e) { /* tom eller ødelagt lagring: start forfra */ }
-    return d;
+    let saved = null;
+    try { saved = JSON.parse(localStorage.getItem(STORE_KEY)); } catch (e) { /* tom eller ødelagt lagring: start forfra */ }
+    return L.normalizeState(saved, LEVEL_COUNTS);
   }
 
   function save() {
@@ -43,24 +20,13 @@
   }
 
   let state = load();
-  for (const area of AREAS) {
-    state[area].level = Math.min(Math.max(1, state[area].level), LEVELS[area].length);
-  }
 
   // ---------- Hjælpere ----------
 
   const $ = (sel) => document.querySelector(sel);
-  const rand = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
-  const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
-
-  function shuffle(arr) {
-    const a = arr.slice();
-    for (let i = a.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [a[i], a[j]] = [a[j], a[i]];
-    }
-    return a;
-  }
+  const rng = () => Math.random();
+  const rand = (min, max) => L.rand(rng, min, max);
+  const pick = (arr) => L.pick(rng, arr);
 
   function el(tag, cls, text) {
     const e = document.createElement(tag);
@@ -166,16 +132,33 @@
 
   let area = null; // 'spell' eller 'math'
   let task = null;
+  let round = null; // den igangværende runde på 10 opgaver
   let nextTimer = null;
+  let lookTimer = null; // Ugens ord: skjuler ordet efter 6 sekunder
+  let peekTimer = null; // Ugens ord: "Kig igen"
+
+  function clearTaskTimers() {
+    clearTimeout(nextTimer);
+    clearTimeout(lookTimer);
+    clearTimeout(peekTimer);
+  }
+
+  // Nyt indhold under fingeren må ikke fange resten af et dobbelttryk.
+  function armTask() {
+    const root = $('#task');
+    root.classList.add('arming');
+    setTimeout(() => root.classList.remove('arming'), 400);
+  }
 
   function show(name) {
     document.querySelectorAll('.screen').forEach((s) => { s.hidden = s.id !== 'screen-' + name; });
     if (name !== 'play') {
-      clearTimeout(nextTimer);
+      clearTaskTimers();
       stopSpeech();
     }
     if (name === 'home') renderHome();
     if (name === 'parent') renderParent();
+    if (name === 'album') renderAlbum();
   }
 
   // Android-tilbageknappen skal føre hjem i stedet for at lukke appen.
@@ -183,11 +166,19 @@
     show(name);
     history.pushState({ screen: name }, '');
   }
+  // leaving forhindrer, at et dobbelttryk på Hjem går to skridt tilbage og lukker appen.
+  let leaving = false;
   function goHome() {
-    if (history.state && history.state.screen) history.back();
-    else show('home');
+    if (leaving) return;
+    if (history.state && history.state.screen) {
+      leaving = true;
+      history.back();
+    } else show('home');
   }
-  window.addEventListener('popstate', () => show('home'));
+  window.addEventListener('popstate', () => {
+    leaving = false;
+    show('home');
+  });
   document.querySelectorAll('[data-home]').forEach((b) => b.addEventListener('click', goHome));
 
   function updateStars() {
@@ -201,19 +192,30 @@
 
   function renderHome() {
     $('#greeting').textContent = state.settings.name ? `Hej ${state.settings.name}!` : 'Hej!';
-    $('#spell-level-label').textContent = levelLabel('spell');
-    $('#math-level-label').textContent = levelLabel('math');
-    $('#pattern-level-label').textContent = levelLabel('pattern');
+    for (const a of Object.keys(LEVELS)) {
+      $(`#${a}-level-label`).textContent = levelLabel(a);
+      // Én prik pr. niveau; de nåede niveauer er fyldt ud.
+      const pips = $(`#${a}-pips`);
+      pips.replaceChildren(...LEVELS[a].map((_, i) => el('span', i < state[a].level ? 'pip on' : 'pip')));
+    }
     $('#parent-hint').hidden = true;
     updateStars();
+    $('#album-count').textContent = state.stickers.length;
+    const n = state.customWords.length;
+    $('#go-words').hidden = n === 0;
+    $('#words-level-label').textContent = `${n} ord at øve`;
+    $('#album-new').hidden = !(state.stickersSeen < state.stickers.length);
   }
 
   $('#go-spell').addEventListener('click', () => startArea('spell'));
   $('#go-math').addEventListener('click', () => startArea('math'));
   $('#go-pattern').addEventListener('click', () => startArea('pattern'));
+  $('#go-album').addEventListener('click', () => open('album'));
+  $('#go-words').addEventListener('click', () => startArea('words'));
 
   function startArea(a) {
     area = a;
+    round = L.newRound(a);
     open('play');
     nextTask();
   }
@@ -221,60 +223,41 @@
   // ---------- Fælles for opgaver ----------
 
   function nextTask() {
-    clearTimeout(nextTimer);
+    clearTaskTimers();
     $('#feedback').textContent = '';
-    renderStreak();
+    renderRound();
     if (area === 'spell') spellTask();
     else if (area === 'math') mathTask();
+    else if (area === 'words') wordsTask();
     else patternTask();
+    armTask();
   }
 
-  function renderStreak() {
-    const box = $('#streak');
-    box.replaceChildren();
-    const p = state[area];
-    const atMax = p.level >= LEVELS[area].length;
-    const filled = atMax ? Math.min(p.streak, LEVEL_UP_AFTER) : p.streak;
-    for (let i = 0; i < LEVEL_UP_AFTER; i++) {
-      box.append(el('span', i < filled ? 'dot on' : 'dot'));
-    }
-  }
-
-  // Returnerer +1 ved nyt niveau, -1 ved lavere niveau, ellers 0.
-  function recordResult(a, firstTry) {
-    const p = state[a];
-    const max = LEVELS[a].length;
-    p.done++;
-    let change = 0;
-    if (firstTry) {
-      p.streak++;
-      p.misses = 0;
-      if (p.streak >= LEVEL_UP_AFTER && p.level < max) {
-        p.level++;
-        p.streak = 0;
-        change = 1;
-      }
-    } else {
-      p.streak = 0;
-      p.misses++;
-      if (p.misses >= LEVEL_DOWN_AFTER && p.level > 1) {
-        p.level--;
-        p.misses = 0;
-        change = -1;
-      }
-    }
-    save();
-    return change;
+  // Fremdriftslinje øverst: ét felt pr. opgave i runden.
+  function renderRound() {
+    const bar = $('#round');
+    bar.replaceChildren(...Array.from({ length: L.ROUND_LENGTH }, (_, i) => el('span', i < round.done ? 'seg on' : 'seg')));
+    bar.setAttribute('aria-label', `Opgave ${Math.min(round.done + 1, L.ROUND_LENGTH)} af ${L.ROUND_LENGTH}`);
   }
 
   // spoken: det der skal siges før rosen, f.eks. ordet der lige er stavet.
   function finishTask(spoken) {
     const done = task;
     done.done = true;
-    state.stars++;
-    const change = recordResult(area, done.mistakes === 0);
+    // Alt gemmes her og nu – også runde og klistermærker, hvis det var den 10. opgave.
+    const { change, roundDone, won } = L.completeTask(state, {
+      area,
+      round,
+      word: area === 'spell' || area === 'words' ? done.word : null,
+      firstTry: done.mistakes === 0,
+      levelCount: LEVEL_COUNTS[area] || 0,
+      date: L.localDate(new Date()),
+      rng,
+      catalog: STICKERS,
+    });
+    save();
     updateStars();
-    renderStreak();
+    renderRound();
     let msg, praise;
     if (change > 0) {
       praise = P.newLevel;
@@ -293,8 +276,59 @@
     const minWait = change > 0 ? 2800 : 1900;
     say(...spoken, praise).then((secs) => {
       if (task !== done || $('#screen-play').hidden) return;
-      nextTimer = setTimeout(nextTask, Math.max(minWait, secs * 1000 + 600));
+      nextTimer = setTimeout(roundDone ? () => showRoundEnd(won) : nextTask, Math.max(minWait, secs * 1000 + 600));
     });
+  }
+
+  // Afslutning på en runde: ros, hvad der er lavet, og to tydelige valg.
+  // Runden og klistermærkerne er allerede gemt i finishTask; her vises de bare.
+  function showRoundEnd(wonIds) {
+    const r = round;
+    const won = wonIds.map((id) => STICKERS.find((st) => st.id === id));
+    $('#feedback').textContent = '';
+    const name = state.settings.name;
+    const box = el('div', 'round-end');
+    const stars = el('div', 'round-stars');
+    stars.setAttribute('aria-label', `${r.done} stjerner`);
+    for (let i = 0; i < r.done; i++) stars.append(el('span', 'round-star', '⭐'));
+    const again = el('button', `big-action ${r.area}`, '🔁 Én runde mere');
+    again.addEventListener('click', () => {
+      round = L.newRound(r.area);
+      nextTask();
+    });
+    const home = el('button', 'small-btn round-home', '🏠 Hjem');
+    home.addEventListener('click', goHome);
+    const actions = el('div', 'round-actions');
+    actions.append(again, home);
+    const praiseCol = el('div', 'round-col');
+    const rewardCol = el('div', 'round-col');
+    praiseCol.append(
+      el('div', 'round-trophy', '🏆'),
+      el('h2', 'round-title', name ? `Flot klaret, ${name}!` : 'Flot klaret!'),
+      stars,
+      el('p', 'round-sub', `${r.done} opgaver · ${r.firstTry} rigtige i første forsøg`),
+    );
+    box.append(praiseCol, rewardCol);
+    if (won.length) {
+      const reveal = el('button', 'sticker-reveal');
+      reveal.setAttribute('aria-label', 'Se albummet');
+      const row = el('div', 'sticker-reveal-row');
+      won.forEach((st) => {
+        const item = el('div', 'sticker-reveal-item');
+        item.append(el('span', 'sticker-big', st.e), el('span', 'sticker-name', st.name));
+        row.append(item);
+      });
+      reveal.append(el('span', 'sticker-reveal-title', won.length > 1 ? 'Perfekt runde! 2 nye klistermærker' : 'Nyt klistermærke!'), row);
+      reveal.addEventListener('click', () => open('album'));
+      rewardCol.append(reveal);
+    }
+    rewardCol.append(actions);
+    $('#task').replaceChildren(box);
+    armTask();
+    sfx('level');
+    celebrate(40);
+    say(P.roundDone, ...(won.length ? [P.newSticker, ...won.map((st) => st.name)] : []));
+    again.focus();
   }
 
   function wrong(btn) {
@@ -329,20 +363,11 @@
 
   const recentWords = [];
 
-  function pickWord(pools) {
-    const all = pools.flatMap((p) => WORDS[p]);
-    let candidates = all.filter((w) => !recentWords.includes(w.word));
-    if (!candidates.length) candidates = all;
-    const w = pick(candidates);
-    recentWords.push(w.word);
-    if (recentWords.length > 8) recentWords.shift();
-    return w;
-  }
-
   function spellTask() {
     const lvl = SPELL_LEVELS[state.spell.level - 1];
-    const w = pickWord(lvl.pool);
-    const letters = Array.from(w.word);
+    const w = L.pickWord(rng, lvl.pool.flatMap((p) => WORDS[p]), recentWords, state.wordStats);
+    const t = L.spellTask(rng, lvl, w, LETTERS);
+    const letters = t.letters;
     task = { word: w.word, letters, mistakes: 0, pos: 0, wrongHere: 0, done: false };
 
     const root = $('#task');
@@ -357,7 +382,9 @@
     const slots = el('div', 'slots');
     letters.forEach(() => slots.append(el('div', 'slot')));
     const tiles = el('div', 'tiles');
-    root.append(pictureRow, slots, tiles);
+    // Kort, synlig instruktion – til forælderen der læser med, og når lyden er slået fra.
+    const prompt = el('p', 'task-prompt', lvl.mode === 'first' ? P.firstLetter : P.spell);
+    root.append(pictureRow, prompt, slots, tiles);
 
     if (lvl.mode === 'first') {
       slots.children[0].textContent = '?';
@@ -366,21 +393,19 @@
         slots.children[i].textContent = fmt(letters[i]);
         slots.children[i].classList.add('given');
       }
-      const others = shuffle(LETTERS.filter((l) => l !== letters[0])).slice(0, lvl.choices - 1);
-      shuffle([letters[0], ...others]).forEach((l) => {
-        const t = el('button', 'tile', fmt(l));
-        t.addEventListener('click', () => onFirstLetter(t, l, slots));
-        tiles.append(t);
+      t.tiles.forEach((l) => {
+        const tile = el('button', 'tile', fmt(l));
+        tile.addEventListener('click', () => onFirstLetter(tile, l, slots));
+        tiles.append(tile);
       });
       say(w.word, P.firstLetter);
     } else {
       slots.children[0].classList.add('current');
-      const distractors = shuffle(LETTERS.filter((l) => !letters.includes(l))).slice(0, lvl.extra);
-      shuffle([...letters, ...distractors]).forEach((l) => {
-        const t = el('button', 'tile', fmt(l));
-        t.dataset.letter = l;
-        t.addEventListener('click', () => onBuildLetter(t, l, slots, tiles));
-        tiles.append(t);
+      t.tiles.forEach((l) => {
+        const tile = el('button', 'tile', fmt(l));
+        tile.dataset.letter = l;
+        tile.addEventListener('click', () => onBuildLetter(tile, l, slots, tiles));
+        tiles.append(tile);
       });
       say(w.word, P.spell);
     }
@@ -412,6 +437,7 @@
       const slot = slots.children[task.pos];
       slot.textContent = fmt(letter);
       slot.classList.remove('current');
+      slot.classList.remove('peeking');
       slot.classList.add('filled', 'pop');
       task.pos++;
       task.wrongHere = 0;
@@ -432,19 +458,80 @@
     }
   }
 
-  // ---------- Regne ----------
+  // ---------- Ugens ord: se, husk, stav ----------
 
-  function makeChoices(answer, min, max, n, unit = 1) {
-    const set = new Set([answer]);
-    for (const o of shuffle([-1, 1, -2, 2, -3, 3])) {
-      if (set.size >= n) break;
-      const v = answer + o * unit;
-      if (v >= min && v <= max) set.add(v);
-    }
-    let guard = 0;
-    while (set.size < n && guard++ < 100) set.add(min + unit * rand(0, Math.floor((max - min) / unit)));
-    return Array.from(set).sort((a, b) => a - b);
+  const recentCustom = [];
+
+  function wordsTask() {
+    if (!state.customWords.length) return goHome();
+    const w = L.pickWord(rng, state.customWords, recentCustom, state.wordStats);
+    const t = L.spellTask(rng, { mode: 'build', extra: 3 }, w, LETTERS);
+    task = { word: w.word, letters: t.letters, mistakes: 0, pos: 0, wrongHere: 0, done: false };
+
+    const root = $('#task');
+    root.replaceChildren();
+
+    // 1. Se: ordet vises stort, indtil barnet er klar (eller efter 6 sekunder).
+    const look = el('div', 'look-card');
+    const shown = el('div', 'look-word', t.letters.map(fmt).join(''));
+    const ready = el('button', 'big-action words', 'Klar! 🙈');
+    look.append(el('p', 'look-title', 'Kig godt på ordet'), shown, ready);
+    root.append(look);
+    say(P.lookAtWord, w.word);
+    const myTask = task;
+    const start = () => {
+      if (task !== myTask || myTask.started || myTask.done || $('#screen-play').hidden) return;
+      myTask.started = true;
+      clearTimeout(lookTimer);
+      buildFromMemory(t);
+      armTask();
+    };
+    lookTimer = setTimeout(start, 6000);
+    ready.addEventListener('click', start);
+    ready.focus();
   }
+
+  // 2.-3. Husk og stav: ordet er skjult; "Kig igen" viser det kort (tæller som hjælp).
+  function buildFromMemory(t) {
+    const root = $('#task');
+    root.replaceChildren();
+    const peek = el('button', 'small-btn peek', '👀 Kig igen');
+    const slots = el('div', 'slots');
+    t.letters.forEach(() => slots.append(el('div', 'slot')));
+    slots.children[0].classList.add('current');
+    const tiles = el('div', 'tiles');
+    t.tiles.forEach((l) => {
+      const tile = el('button', 'tile', fmt(l));
+      tile.dataset.letter = l;
+      tile.addEventListener('click', () => onBuildLetter(tile, l, slots, tiles));
+      tiles.append(tile);
+    });
+    peek.addEventListener('click', () => {
+      if (task.done) return;
+      task.mistakes++; // hjælp tæller ikke som rigtig i første forsøg
+      clearTimeout(peekTimer);
+      t.letters.forEach((l, i) => {
+        const s = slots.children[i];
+        if (!s.classList.contains('filled')) {
+          s.textContent = fmt(l);
+          s.classList.add('peeking');
+        }
+      });
+      peekTimer = setTimeout(() => {
+        Array.from(slots.children).forEach((s) => {
+          if (s.classList.contains('peeking')) {
+            s.textContent = '';
+            s.classList.remove('peeking');
+          }
+        });
+      }, 1800);
+    });
+    root.append(el('p', 'look-title', P.spellFromMemory), slots, tiles, peek);
+    say(P.spellFromMemory);
+    tiles.firstChild.focus();
+  }
+
+  // ---------- Regne ----------
 
   // Billeder lagt i rækker af 5 (som en tierramme), så de er nemme at tælle.
   // Barnet kan trykke på dem for at tælle højt.
@@ -470,33 +557,26 @@
 
   function mathTask() {
     const lvl = MATH_LEVELS[state.math.level - 1];
-    const type = lvl.type === 'mix' ? pick(['add', 'sub']) : lvl.type;
-    const item = pick(COUNT_ITEMS);
+    const m = L.mathTask(rng, lvl, COUNT_ITEMS);
+    const { type, item, a, b, answer } = m;
     const counter = { n: 0 };
-    let answer, question, spoken, visual = null;
+    let question, spoken, visual = null;
 
     if (type === 'count') {
-      answer = rand(1, lvl.max);
       question = 'Hvor mange?';
       spoken = [`Hvor mange ${item.pl}?`];
       visual = group(item.e, answer, Infinity, counter);
     } else if (type === 'add') {
-      const a = rand(1, lvl.max - 1);
-      const b = rand(1, lvl.max - a);
-      answer = a + b;
       question = `${a} + ${b} = ?`;
       spoken = [P.whatIs, sayNumber(a), P.plus, sayNumber(b)];
-      if (lvl.pictures) {
+      if (m.pictures) {
         visual = el('div', 'visual-row');
         visual.append(group(item.e, a, Infinity, counter), el('span', 'op', '+'), group(item.e, b, Infinity, counter));
       }
     } else {
-      const a = rand(2, lvl.max);
-      const b = rand(1, a);
-      answer = a - b;
       question = `${a} − ${b} = ?`;
       spoken = [P.whatIs, sayNumber(a), P.minus, sayNumber(b)];
-      if (lvl.pictures) visual = group(item.e, a, a - b, counter);
+      if (m.pictures) visual = group(item.e, a, a - b, counter);
     }
 
     task = { answer, mistakes: 0, done: false };
@@ -509,12 +589,11 @@
       root.append(wrap);
     }
     const qRow = el('div', 'question-row');
-    qRow.append(el('div', 'question', question), speakerButton(...spoken));
+    qRow.append(el('div', type === 'count' ? 'question question-small' : 'question', question), speakerButton(...spoken));
     root.append(qRow);
 
     const choices = el('div', 'choices');
-    const min = type === 'count' ? 1 : 0;
-    makeChoices(answer, min, lvl.max, lvl.choices).forEach((v) => {
+    m.choices.forEach((v) => {
       const b = el('button', 'choice', String(v));
       b.addEventListener('click', () => {
         if (task.done || b.disabled) return;
@@ -536,39 +615,10 @@
 
   // ---------- Mønstre ----------
 
-  function shapePattern(lvl) {
-    const unit = Array.from(pick(lvl.units)); // f.eks. ['A', 'A', 'B']
-    const kinds = Array.from(new Set(unit));
-    const symbols = shuffle(pick(PATTERN_THEMES)).slice(0, kinds.length + 1);
-    const symbolOf = Object.fromEntries(kinds.map((k, i) => [k, symbols[i]]));
-    // Mindst to hele gentagelser, så mønsteret kan ses.
-    const length = unit.length * 2 + rand(0, unit.length - 1);
-    const seq = Array.from({ length: length + 1 }, (_, i) => symbolOf[unit[i % unit.length]]);
-    const answer = seq[length];
-    const others = shuffle(symbols.filter((x) => x !== answer)).slice(0, 2);
-    return { seq, missing: length, answer, choices: shuffle([answer, ...others]), unitLength: unit.length };
-  }
-
-  function numberPattern(lvl) {
-    const step = pick(lvl.steps);
-    const size = Math.abs(step);
-    const max = size === 10 ? 100 : 20;
-    const n = Math.min(lvl.shown, Math.floor(max / size) - 1);
-    const span = size * n;
-    // Startværdien vælges, så hele rækken holder sig mellem 0 og max.
-    // Spring på 2, 5 og 10 starter i et tal, man "tæller med" (0, 2, 4 … / 5, 10 …).
-    const startSlot = size === 1 ? rand(0, max - span) : size * rand(0, Math.floor((max - span) / size));
-    const start = step > 0 ? startSlot : startSlot + span;
-    const seq = Array.from({ length: n + 1 }, (_, i) => start + i * step);
-    const missing = lvl.missingInside && Math.random() < 0.5 ? rand(1, n - 1) : n;
-    const answer = seq[missing];
-    return { seq, missing, answer, choices: makeChoices(answer, 0, max, 3, size >= 5 ? size : 1), step };
-  }
-
   function patternTask() {
     const lvl = PATTERN_LEVELS[state.pattern.level - 1];
-    const isNumber = lvl.type === 'number';
-    const p = isNumber ? numberPattern(lvl) : shapePattern(lvl);
+    const p = L.patternTask(rng, lvl, PATTERN_THEMES);
+    const isNumber = p.isNumber;
     task = { answer: p.answer, mistakes: 0, done: false };
 
     const prompt = p.missing === p.seq.length - 1 ? P.patternNext : P.patternMissing;
@@ -616,6 +666,51 @@
     say(prompt);
   }
 
+  // ---------- Album ----------
+
+  function renderAlbum() {
+    const box = $('#album');
+    box.replaceChildren();
+    const owned = new Set(state.stickers);
+    const fresh = new Set(state.stickers.slice(state.stickersSeen || 0));
+    $('#album-total').textContent = `${owned.size} af ${STICKERS.length}`;
+    if (!owned.size) {
+      const empty = el('div', 'album-empty');
+      empty.append(el('div', 'album-empty-icon', '📒'), el('p', null, 'Albummet er tomt. Lav en runde på 10 opgaver, så får du dit første klistermærke!'));
+      box.append(empty);
+    }
+    const themes = Array.from(new Set(STICKERS.map((st) => st.theme)));
+    for (const theme of themes) {
+      const list = STICKERS.filter((st) => st.theme === theme);
+      const got = list.filter((st) => owned.has(st.id)).length;
+      const section = el('section', 'album-theme');
+      section.append(el('h3', null, `${theme} · ${got}/${list.length}`));
+      const grid = el('div', 'album-grid');
+      for (const st of list) {
+        const has = owned.has(st.id);
+        const cell = el('button', 'sticker' + (has ? '' : ' missing') + (fresh.has(st.id) ? ' fresh' : ''));
+        cell.append(el('span', 'sticker-emoji', st.e), el('span', 'sticker-label', has ? st.name : '?'));
+        cell.setAttribute('aria-label', has ? st.name : 'Ikke fundet endnu');
+        if (has) {
+          cell.addEventListener('click', () => {
+            cell.classList.remove('pop');
+            void cell.offsetWidth;
+            cell.classList.add('pop');
+            say(st.name);
+          });
+        } else {
+          cell.disabled = true;
+        }
+        grid.append(cell);
+      }
+      section.append(grid);
+      box.append(section);
+    }
+    // Nye klistermærker er nu set.
+    state.stickersSeen = state.stickers.length;
+    save();
+  }
+
   // ---------- Voksen-indstillinger ----------
 
   const parentBtn = $('#parent-btn');
@@ -647,10 +742,144 @@
     $('#spell-level-set').textContent = levelLabel('spell');
     $('#math-level-set').textContent = levelLabel('math');
     $('#pattern-level-set').textContent = levelLabel('pattern');
+    renderWeek();
+    renderCustomWords();
     $('#stats').textContent =
-      `${state.stars} stjerner i alt · ${state.spell.done} staveopgaver · ${state.math.done} regneopgaver · ${state.pattern.done} mønstre`;
+      `I alt: ${state.stars} stjerner · ${state.spell.done} staveopgaver · ${state.math.done} regneopgaver · ${state.pattern.done} mønstre · ${state.stickers.length} klistermærker`;
+    // Kun ord der kan komme lige nu (stave-niveauets ordliste + ugens ord), så listen passer med teksten.
+    const practicable = new Set([
+      ...SPELL_LEVELS[state.spell.level - 1].pool.flatMap((p) => WORDS[p]).map((w) => w.word),
+      ...state.customWords.map((w) => w.word),
+    ]);
+    const hard = L.hardWords(state, practicable);
+    const chips = $('#hard-words');
+    chips.replaceChildren(...hard.slice(0, 24).map((h) => {
+      const c = el('span', 'chip');
+      c.append(el('strong', null, h.word), el('span', 'chip-count', `${h.misses}× fejl/hjælp`));
+      return c;
+    }));
+    if (!hard.length) chips.append(el('p', 'note', 'Ingen svære ord lige nu. 🎉'));
     $('#voice-status').textContent = `${audio.available.size} lydklip installeret.`;
   }
+
+  const AREA_NAMES = { spell: 'Stave', math: 'Regne', pattern: 'Mønstre', words: 'Ugens ord' };
+  const DAY_NAMES = ['søn', 'man', 'tir', 'ons', 'tor', 'fre', 'lør'];
+
+  // Søjler for runder pr. dag de sidste 7 dage + rigtige i første forsøg pr. område.
+  function renderWeek() {
+    const today = new Date();
+    const w = L.weekSummary(state.history, today);
+    const max = Math.max(1, ...w.days.map((d) => d.rounds));
+    const week = $('#week');
+    week.setAttribute('aria-label', 'Runder pr. dag: ' + w.days.map((d) => `${d.date} ${d.rounds}`).join(', '));
+    week.replaceChildren(...w.days.map((d, i) => {
+      const col = el('div', 'week-day' + (i === 6 ? ' today' : ''));
+      const bar = el('div', 'week-bar');
+      bar.style.height = `${Math.round((d.rounds / max) * 100)}%`;
+      const [y, m, day] = d.date.split('-').map(Number);
+      const label = i === 6 ? 'i dag' : DAY_NAMES[new Date(y, m - 1, day).getDay()];
+      col.append(el('span', 'week-count', d.rounds ? String(d.rounds) : ''), el('div', 'week-track'), el('span', 'week-label', label));
+      col.querySelector('.week-track').append(bar);
+      return col;
+    }));
+    const stats = $('#area-stats');
+    const rows = Object.entries(w.areas);
+    stats.replaceChildren(...rows.map(([a, s]) => {
+      const pct = Math.round((s.firstTry / s.tasks) * 100);
+      const row = el('div', `area-stat ${a}`);
+      const meter = el('div', 'meter');
+      const fill = el('div', 'meter-fill');
+      fill.style.width = `${pct}%`;
+      meter.append(fill);
+      row.append(
+        el('span', 'area-stat-name', AREA_NAMES[a] || a),
+        el('span', 'area-stat-rounds', `${s.rounds} ${s.rounds === 1 ? 'runde' : 'runder'}`),
+        meter,
+        el('span', 'area-stat-pct', `${pct} %`),
+      );
+      return row;
+    }));
+    if (!rows.length) stats.append(el('p', 'note', 'Ingen afsluttede runder de sidste 7 dage. En runde er 10 opgaver.'));
+    else stats.prepend(el('p', 'note area-stat-head', 'Rigtige i første forsøg'));
+  }
+
+  function renderCustomWords() {
+    const list = $('#custom-words');
+    list.replaceChildren(...state.customWords.map(({ word }) => {
+      const c = el('span', 'chip words-chip');
+      const remove = el('button', 'chip-remove', '×');
+      remove.setAttribute('aria-label', `Fjern ${word}`);
+      remove.addEventListener('click', () => {
+        L.removeCustomWord(state, word);
+        forgetCustomStats([word]);
+        save();
+        renderCustomWords();
+      });
+      c.append(el('strong', null, word), remove);
+      return c;
+    }));
+    const n = state.customWords.length;
+    $('#words-note').textContent = n
+      ? `${n} ord. De øves under "Ugens ord" på forsiden: ordet vises, skjules og staves med brikker. Egne ord bliver ikke læst op, så læs gerne ordet højt sammen med barnet.`
+      : 'Skriv ugens ord fra skolen, så kan de øves under "Ugens ord" på forsiden.';
+    $('#clear-words').hidden = n === 0;
+  }
+
+  $('#word-form').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const input = $('#word-input');
+    const r = L.addCustomWord(state, input.value);
+    const err = $('#word-error');
+    if (!r.ok) {
+      err.textContent = r.error;
+      err.hidden = false;
+      input.setAttribute('aria-invalid', 'true');
+      return;
+    }
+    err.hidden = true;
+    input.removeAttribute('aria-invalid');
+    input.value = '';
+    input.focus();
+    save();
+    renderCustomWords();
+  });
+  $('#word-input').addEventListener('input', () => {
+    $('#word-error').hidden = true;
+    $('#word-input').removeAttribute('aria-invalid');
+  });
+
+  // Ugens ord der ikke også står i de faste ordlister, mister deres statistik, når de fjernes.
+  const FIXED_WORDS = new Set(Object.values(WORDS).flat().map((w) => w.word));
+  function forgetCustomStats(words) {
+    for (const w of words) if (!FIXED_WORDS.has(w)) delete state.wordStats[w];
+  }
+
+  // Knap der kræver to tryk inden for 4 sekunder, så den ikke rammes ved et uheld.
+  function twoTapButton(btn, confirmLabel, action) {
+    const label = btn.textContent;
+    let armed = null;
+    btn.addEventListener('click', () => {
+      if (!armed) {
+        btn.textContent = confirmLabel;
+        armed = setTimeout(() => {
+          armed = null;
+          btn.textContent = label;
+        }, 4000);
+        return;
+      }
+      clearTimeout(armed);
+      armed = null;
+      btn.textContent = label;
+      action();
+    });
+  }
+
+  twoTapButton($('#clear-words'), 'Tryk igen for at rydde listen', () => {
+    forgetCustomStats(state.customWords.map((w) => w.word));
+    state.customWords = [];
+    save();
+    renderCustomWords();
+  });
 
   $('#set-name').addEventListener('input', (e) => {
     state.settings.name = e.target.value.trim();
@@ -676,23 +905,8 @@
     save();
     renderParent();
   }));
-  // To tryk for at nulstille, så det ikke sker ved et uheld.
-  const resetBtn = $('#reset');
-  const resetLabel = resetBtn.textContent;
-  let resetArmed = null;
-  resetBtn.addEventListener('click', () => {
-    if (!resetArmed) {
-      resetBtn.textContent = 'Tryk igen for at nulstille';
-      resetArmed = setTimeout(() => {
-        resetArmed = null;
-        resetBtn.textContent = resetLabel;
-      }, 4000);
-      return;
-    }
-    clearTimeout(resetArmed);
-    resetArmed = null;
-    resetBtn.textContent = resetLabel;
-    state = { ...defaultState(), settings: state.settings };
+  twoTapButton($('#reset'), 'Tryk igen for at nulstille', () => {
+    state = { ...L.defaultState(), settings: state.settings, customWords: state.customWords };
     save();
     renderParent();
   });

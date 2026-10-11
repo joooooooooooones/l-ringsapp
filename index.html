@@ -3,36 +3,62 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#4f7cff">
+  <meta name="theme-color" content="#fff6e5">
   <title>Stav og Regn</title>
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icons/icon-192.png">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="preload" href="fonts/andika-700.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
   <main id="app">
     <section id="screen-home" class="screen">
-      <header class="top">
-        <span></span>
-        <div class="stars-pill">⭐ <span data-stars>0</span></div>
+      <header class="home-top">
+        <div>
+          <h1 id="greeting">Hej!</h1>
+          <p class="home-sub">Hvad vil du øve?</p>
+        </div>
+        <div class="home-badges">
+          <div class="stars-pill" aria-label="Stjerner">⭐ <span data-stars>0</span></div>
+          <button class="album-btn" id="go-album" aria-label="Mit album">
+            <span aria-hidden="true">📒</span>
+            <span class="album-count" id="album-count">0</span>
+            <span class="album-new" id="album-new" hidden>NY</span>
+          </button>
+        </div>
       </header>
-      <h1 id="greeting">Hej!</h1>
-      <div class="home-buttons">
-        <button class="big-btn spell" id="go-spell">
-          <span class="big-emoji">🔤</span>
-          <span class="big-label">Stave</span>
-          <span class="big-sub" id="spell-level-label"></span>
+      <div class="area-grid">
+        <button class="area-card spell" id="go-spell">
+          <span class="area-icon" aria-hidden="true">🔤</span>
+          <span class="area-text">
+            <span class="area-title">Stave</span>
+            <span class="area-level" id="spell-level-label"></span>
+            <span class="pips" id="spell-pips" aria-hidden="true"></span>
+          </span>
         </button>
-        <button class="big-btn math" id="go-math">
-          <span class="big-emoji">🔢</span>
-          <span class="big-label">Regne</span>
-          <span class="big-sub" id="math-level-label"></span>
+        <button class="area-card math" id="go-math">
+          <span class="area-icon" aria-hidden="true">🔢</span>
+          <span class="area-text">
+            <span class="area-title">Regne</span>
+            <span class="area-level" id="math-level-label"></span>
+            <span class="pips" id="math-pips" aria-hidden="true"></span>
+          </span>
         </button>
-        <button class="big-btn pattern" id="go-pattern">
-          <span class="big-emoji">🧩</span>
-          <span class="big-label">Mønstre</span>
-          <span class="big-sub" id="pattern-level-label"></span>
+        <button class="area-card pattern" id="go-pattern">
+          <span class="area-icon" aria-hidden="true">🧩</span>
+          <span class="area-text">
+            <span class="area-title">Mønstre</span>
+            <span class="area-level" id="pattern-level-label"></span>
+            <span class="pips" id="pattern-pips" aria-hidden="true"></span>
+          </span>
+        </button>
+        <button class="area-card words" id="go-words" hidden>
+          <span class="area-icon" aria-hidden="true">📝</span>
+          <span class="area-text">
+            <span class="area-title">Ugens ord</span>
+            <span class="area-level" id="words-level-label"></span>
+          </span>
         </button>
       </div>
       <button id="parent-btn" class="parent-btn" aria-label="Voksen-indstillinger (hold nede)">⚙️</button>
@@ -42,71 +68,110 @@
     <section id="screen-play" class="screen" hidden>
       <header class="top">
         <button class="icon-btn" data-home aria-label="Hjem">🏠</button>
-        <div class="streak" id="streak" aria-hidden="true"></div>
+        <div class="round-bar" id="round" role="img"></div>
         <div class="stars-pill">⭐ <span data-stars>0</span></div>
       </header>
       <div id="task" class="task"></div>
       <div id="feedback" class="feedback" aria-live="polite"></div>
     </section>
 
+    <section id="screen-album" class="screen" hidden>
+      <header class="top">
+        <button class="icon-btn" data-home aria-label="Hjem">🏠</button>
+        <h2>Mit album</h2>
+        <div class="stars-pill album-total" id="album-total"></div>
+      </header>
+      <div class="album" id="album"></div>
+    </section>
+
     <section id="screen-parent" class="screen" hidden>
       <header class="top">
         <button class="icon-btn" data-home aria-label="Hjem">🏠</button>
         <h2>For voksne</h2>
-        <span></span>
+        <span class="top-spacer"></span>
       </header>
       <div class="parent-body">
-        <label class="field">
-          <span>Barnets navn</span>
-          <input id="set-name" type="text" maxlength="20" autocomplete="off">
-        </label>
-        <label class="field row">
-          <span>Brug STORE bogstaver</span>
-          <input id="set-upper" type="checkbox">
-        </label>
-        <label class="field row" data-sound-only>
-          <span>Lyd og oplæsning</span>
-          <input id="set-sound" type="checkbox">
-        </label>
-        <div class="field" data-sound-only>
-          <button class="small-btn" id="test-voice" type="button">🔊 Test lyden</button>
-          <p class="note" id="voice-status"></p>
-        </div>
-        <div class="field">
-          <span>Stave-niveau</span>
-          <div class="stepper">
-            <button class="small-btn" type="button" data-step="spell" data-dir="-1" aria-label="Lavere">−</button>
-            <span id="spell-level-set"></span>
-            <button class="small-btn" type="button" data-step="spell" data-dir="1" aria-label="Højere">+</button>
-          </div>
-        </div>
-        <div class="field">
-          <span>Regne-niveau</span>
-          <div class="stepper">
-            <button class="small-btn" type="button" data-step="math" data-dir="-1" aria-label="Lavere">−</button>
-            <span id="math-level-set"></span>
-            <button class="small-btn" type="button" data-step="math" data-dir="1" aria-label="Højere">+</button>
-          </div>
-        </div>
-        <div class="field">
-          <span>Mønstre-niveau</span>
-          <div class="stepper">
-            <button class="small-btn" type="button" data-step="pattern" data-dir="-1" aria-label="Lavere">−</button>
-            <span id="pattern-level-set"></span>
-            <button class="small-btn" type="button" data-step="pattern" data-dir="1" aria-label="Højere">+</button>
-          </div>
-        </div>
-        <p class="note">Niveauet skifter også af sig selv: 5 rigtige i træk giver nyt niveau, og 3 svære opgaver i træk går et niveau ned.</p>
-        <div class="field">
-          <span>Statistik</span>
+        <section class="panel">
+          <h3>Ugens ord</h3>
+          <form class="word-form" id="word-form" autocomplete="off">
+            <input id="word-input" type="text" maxlength="30" placeholder="Skriv et ord fra skolen" aria-label="Nyt ord" autocapitalize="none" spellcheck="false">
+            <button class="small-btn primary" type="submit">Tilføj</button>
+          </form>
+          <p class="form-error" id="word-error" role="alert" hidden></p>
+          <div class="chips" id="custom-words"></div>
+          <p class="note" id="words-note"></p>
+          <button class="small-btn" id="clear-words" type="button" hidden>Ryd listen til en ny uge</button>
+        </section>
+
+        <section class="panel">
+          <h3>Den sidste uge</h3>
+          <div class="week" id="week"></div>
+          <div class="area-stats" id="area-stats"></div>
           <p class="note" id="stats"></p>
-        </div>
-        <button class="small-btn danger" id="reset" type="button">Nulstil stjerner og niveauer</button>
+        </section>
+
+        <section class="panel">
+          <h3>Svære ord</h3>
+          <div class="chips" id="hard-words"></div>
+          <p class="note">Ord med fejl kommer oftere igen, indtil de er stavet rigtigt to gange i træk.</p>
+        </section>
+
+        <section class="panel">
+          <h3>Niveau</h3>
+          <div class="field">
+            <span>Stave</span>
+            <div class="stepper">
+              <button class="small-btn" type="button" data-step="spell" data-dir="-1" aria-label="Lavere stave-niveau">−</button>
+              <span id="spell-level-set"></span>
+              <button class="small-btn" type="button" data-step="spell" data-dir="1" aria-label="Højere stave-niveau">+</button>
+            </div>
+          </div>
+          <div class="field">
+            <span>Regne</span>
+            <div class="stepper">
+              <button class="small-btn" type="button" data-step="math" data-dir="-1" aria-label="Lavere regne-niveau">−</button>
+              <span id="math-level-set"></span>
+              <button class="small-btn" type="button" data-step="math" data-dir="1" aria-label="Højere regne-niveau">+</button>
+            </div>
+          </div>
+          <div class="field">
+            <span>Mønstre</span>
+            <div class="stepper">
+              <button class="small-btn" type="button" data-step="pattern" data-dir="-1" aria-label="Lavere mønstre-niveau">−</button>
+              <span id="pattern-level-set"></span>
+              <button class="small-btn" type="button" data-step="pattern" data-dir="1" aria-label="Højere mønstre-niveau">+</button>
+            </div>
+          </div>
+          <p class="note">Niveauet skifter også af sig selv: 5 rigtige i træk giver nyt niveau, og 3 svære opgaver i træk går et niveau ned.</p>
+        </section>
+
+        <section class="panel">
+          <h3>Indstillinger</h3>
+          <label class="field">
+            <span>Barnets navn</span>
+            <input id="set-name" type="text" maxlength="20" autocomplete="off">
+          </label>
+          <label class="field row">
+            <span>Brug STORE bogstaver</span>
+            <input id="set-upper" type="checkbox">
+          </label>
+          <label class="field row" data-sound-only>
+            <span>Lyd og oplæsning</span>
+            <input id="set-sound" type="checkbox">
+          </label>
+          <div class="field" data-sound-only>
+            <button class="small-btn" id="test-voice" type="button">🔊 Test lyden</button>
+            <p class="note" id="voice-status"></p>
+          </div>
+        </section>
+
+        <button class="small-btn danger" id="reset" type="button">Nulstil alt undtagen ugens ord og indstillinger</button>
       </div>
     </section>
   </main>
   <div id="celebrate" class="celebrate" aria-hidden="true"></div>
   <script src="js/data.js"></script>
+  <script src="js/logic.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>
