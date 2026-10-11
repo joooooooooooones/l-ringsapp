@@ -549,8 +549,22 @@
     save();
     renderParent();
   }));
-  $('#reset').addEventListener('click', () => {
-    if (!confirm('Vil du nulstille alle stjerner og niveauer?')) return;
+  // To tryk for at nulstille, så det ikke sker ved et uheld.
+  const resetBtn = $('#reset');
+  const resetLabel = resetBtn.textContent;
+  let resetArmed = null;
+  resetBtn.addEventListener('click', () => {
+    if (!resetArmed) {
+      resetBtn.textContent = 'Tryk igen for at nulstille';
+      resetArmed = setTimeout(() => {
+        resetArmed = null;
+        resetBtn.textContent = resetLabel;
+      }, 4000);
+      return;
+    }
+    clearTimeout(resetArmed);
+    resetArmed = null;
+    resetBtn.textContent = resetLabel;
     state = { ...defaultState(), settings: state.settings };
     save();
     renderParent();
