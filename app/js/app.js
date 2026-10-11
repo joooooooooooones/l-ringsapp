@@ -2,40 +2,18 @@
 
 (function () {
   const { WORDS, LETTERS, SPELL_LEVELS, MATH_LEVELS, PATTERN_LEVELS, PATTERN_THEMES, COUNT_ITEMS, PRAISE } = window.DATA;
+  const L = window.LOGIC;
   const STORE_KEY = 'stav-og-regn-v1';
-  const LEVEL_UP_AFTER = 5; // rigtige i første forsøg i træk
-  const LEVEL_DOWN_AFTER = 3; // opgaver med fejl i træk
+  const { LEVEL_UP_AFTER } = L;
   const LEVELS = { spell: SPELL_LEVELS, math: MATH_LEVELS, pattern: PATTERN_LEVELS };
-  const AREAS = Object.keys(LEVELS);
+  const LEVEL_COUNTS = { spell: SPELL_LEVELS.length, math: MATH_LEVELS.length, pattern: PATTERN_LEVELS.length };
 
   // ---------- Gemt tilstand (kun på enheden, ingen server) ----------
 
-  function defaultState() {
-    return {
-      stars: 0,
-      settings: { uppercase: true, sound: true, name: '' },
-      spell: { level: 1, streak: 0, misses: 0, done: 0 },
-      math: { level: 1, streak: 0, misses: 0, done: 0 },
-      pattern: { level: 1, streak: 0, misses: 0, done: 0 },
-    };
-  }
-
   function load() {
-    const d = defaultState();
-    try {
-      const s = JSON.parse(localStorage.getItem(STORE_KEY));
-      if (s) {
-        return {
-          ...d,
-          ...s,
-          settings: { ...d.settings, ...s.settings },
-          spell: { ...d.spell, ...s.spell },
-          math: { ...d.math, ...s.math },
-          pattern: { ...d.pattern, ...s.pattern },
-        };
-      }
-    } catch (e) { /* tom eller ødelagt lagring: start forfra */ }
-    return d;
+    let saved = null;
+    try { saved = JSON.parse(localStorage.getItem(STORE_KEY)); } catch (e) { /* tom eller ødelagt lagring: start forfra */ }
+    return L.normalizeState(saved, LEVEL_COUNTS);
   }
 
   function save() {
@@ -43,24 +21,13 @@
   }
 
   let state = load();
-  for (const area of AREAS) {
-    state[area].level = Math.min(Math.max(1, state[area].level), LEVELS[area].length);
-  }
 
   // ---------- Hjælpere ----------
 
   const $ = (sel) => document.querySelector(sel);
-  const rand = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
-  const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
-
-  function shuffle(arr) {
-    const a = arr.slice();
-    for (let i = a.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [a[i], a[j]] = [a[j], a[i]];
-    }
-    return a;
-  }
+  const rng = () => Math.random();
+  const rand = (min, max) => L.rand(rng, min, max);
+  const pick = (arr) => L.pick(rng, arr);
 
   function el(tag, cls, text) {
     const e = document.createElement(tag);
@@ -242,27 +209,7 @@
 
   // Returnerer +1 ved nyt niveau, -1 ved lavere niveau, ellers 0.
   function recordResult(a, firstTry) {
-    const p = state[a];
-    const max = LEVELS[a].length;
-    p.done++;
-    let change = 0;
-    if (firstTry) {
-      p.streak++;
-      p.misses = 0;
-      if (p.streak >= LEVEL_UP_AFTER && p.level < max) {
-        p.level++;
-        p.streak = 0;
-        change = 1;
-      }
-    } else {
-      p.streak = 0;
-      p.misses++;
-      if (p.misses >= LEVEL_DOWN_AFTER && p.level > 1) {
-        p.level--;
-        p.misses = 0;
-        change = -1;
-      }
-    }
+    const change = L.recordResult(state[a], LEVEL_COUNTS[a], firstTry);
     save();
     return change;
   }
@@ -329,20 +276,11 @@
 
   const recentWords = [];
 
-  function pickWord(pools) {
-    const all = pools.flatMap((p) => WORDS[p]);
-    let candidates = all.filter((w) => !recentWords.includes(w.word));
-    if (!candidates.length) candidates = all;
-    const w = pick(candidates);
-    recentWords.push(w.word);
-    if (recentWords.length > 8) recentWords.shift();
-    return w;
-  }
-
   function spellTask() {
     const lvl = SPELL_LEVELS[state.spell.level - 1];
-    const w = pickWord(lvl.pool);
-    const letters = Array.from(w.word);
+    const w = L.pickWord(rng, lvl.pool.flatMap((p) => WORDS[p]), recentWords);
+    const t = L.spellTask(rng, lvl, w, LETTERS);
+    const letters = t.letters;
     task = { word: w.word, letters, mistakes: 0, pos: 0, wrongHere: 0, done: false };
 
     const root = $('#task');
@@ -366,21 +304,19 @@
         slots.children[i].textContent = fmt(letters[i]);
         slots.children[i].classList.add('given');
       }
-      const others = shuffle(LETTERS.filter((l) => l !== letters[0])).slice(0, lvl.choices - 1);
-      shuffle([letters[0], ...others]).forEach((l) => {
-        const t = el('button', 'tile', fmt(l));
-        t.addEventListener('click', () => onFirstLetter(t, l, slots));
-        tiles.append(t);
+      t.tiles.forEach((l) => {
+        const tile = el('button', 'tile', fmt(l));
+        tile.addEventListener('click', () => onFirstLetter(tile, l, slots));
+        tiles.append(tile);
       });
       say(w.word, P.firstLetter);
     } else {
       slots.children[0].classList.add('current');
-      const distractors = shuffle(LETTERS.filter((l) => !letters.includes(l))).slice(0, lvl.extra);
-      shuffle([...letters, ...distractors]).forEach((l) => {
-        const t = el('button', 'tile', fmt(l));
-        t.dataset.letter = l;
-        t.addEventListener('click', () => onBuildLetter(t, l, slots, tiles));
-        tiles.append(t);
+      t.tiles.forEach((l) => {
+        const tile = el('button', 'tile', fmt(l));
+        tile.dataset.letter = l;
+        tile.addEventListener('click', () => onBuildLetter(tile, l, slots, tiles));
+        tiles.append(tile);
       });
       say(w.word, P.spell);
     }
@@ -434,18 +370,6 @@
 
   // ---------- Regne ----------
 
-  function makeChoices(answer, min, max, n, unit = 1) {
-    const set = new Set([answer]);
-    for (const o of shuffle([-1, 1, -2, 2, -3, 3])) {
-      if (set.size >= n) break;
-      const v = answer + o * unit;
-      if (v >= min && v <= max) set.add(v);
-    }
-    let guard = 0;
-    while (set.size < n && guard++ < 100) set.add(min + unit * rand(0, Math.floor((max - min) / unit)));
-    return Array.from(set).sort((a, b) => a - b);
-  }
-
   // Billeder lagt i rækker af 5 (som en tierramme), så de er nemme at tælle.
   // Barnet kan trykke på dem for at tælle højt.
   function group(emoji, n, crossedFrom, counter) {
@@ -470,33 +394,26 @@
 
   function mathTask() {
     const lvl = MATH_LEVELS[state.math.level - 1];
-    const type = lvl.type === 'mix' ? pick(['add', 'sub']) : lvl.type;
-    const item = pick(COUNT_ITEMS);
+    const m = L.mathTask(rng, lvl, COUNT_ITEMS);
+    const { type, item, a, b, answer } = m;
     const counter = { n: 0 };
-    let answer, question, spoken, visual = null;
+    let question, spoken, visual = null;
 
     if (type === 'count') {
-      answer = rand(1, lvl.max);
       question = 'Hvor mange?';
       spoken = [`Hvor mange ${item.pl}?`];
       visual = group(item.e, answer, Infinity, counter);
     } else if (type === 'add') {
-      const a = rand(1, lvl.max - 1);
-      const b = rand(1, lvl.max - a);
-      answer = a + b;
       question = `${a} + ${b} = ?`;
       spoken = [P.whatIs, sayNumber(a), P.plus, sayNumber(b)];
-      if (lvl.pictures) {
+      if (m.pictures) {
         visual = el('div', 'visual-row');
         visual.append(group(item.e, a, Infinity, counter), el('span', 'op', '+'), group(item.e, b, Infinity, counter));
       }
     } else {
-      const a = rand(2, lvl.max);
-      const b = rand(1, a);
-      answer = a - b;
       question = `${a} − ${b} = ?`;
       spoken = [P.whatIs, sayNumber(a), P.minus, sayNumber(b)];
-      if (lvl.pictures) visual = group(item.e, a, a - b, counter);
+      if (m.pictures) visual = group(item.e, a, a - b, counter);
     }
 
     task = { answer, mistakes: 0, done: false };
@@ -513,8 +430,7 @@
     root.append(qRow);
 
     const choices = el('div', 'choices');
-    const min = type === 'count' ? 1 : 0;
-    makeChoices(answer, min, lvl.max, lvl.choices).forEach((v) => {
+    m.choices.forEach((v) => {
       const b = el('button', 'choice', String(v));
       b.addEventListener('click', () => {
         if (task.done || b.disabled) return;
@@ -536,39 +452,10 @@
 
   // ---------- Mønstre ----------
 
-  function shapePattern(lvl) {
-    const unit = Array.from(pick(lvl.units)); // f.eks. ['A', 'A', 'B']
-    const kinds = Array.from(new Set(unit));
-    const symbols = shuffle(pick(PATTERN_THEMES)).slice(0, kinds.length + 1);
-    const symbolOf = Object.fromEntries(kinds.map((k, i) => [k, symbols[i]]));
-    // Mindst to hele gentagelser, så mønsteret kan ses.
-    const length = unit.length * 2 + rand(0, unit.length - 1);
-    const seq = Array.from({ length: length + 1 }, (_, i) => symbolOf[unit[i % unit.length]]);
-    const answer = seq[length];
-    const others = shuffle(symbols.filter((x) => x !== answer)).slice(0, 2);
-    return { seq, missing: length, answer, choices: shuffle([answer, ...others]), unitLength: unit.length };
-  }
-
-  function numberPattern(lvl) {
-    const step = pick(lvl.steps);
-    const size = Math.abs(step);
-    const max = size === 10 ? 100 : 20;
-    const n = Math.min(lvl.shown, Math.floor(max / size) - 1);
-    const span = size * n;
-    // Startværdien vælges, så hele rækken holder sig mellem 0 og max.
-    // Spring på 2, 5 og 10 starter i et tal, man "tæller med" (0, 2, 4 … / 5, 10 …).
-    const startSlot = size === 1 ? rand(0, max - span) : size * rand(0, Math.floor((max - span) / size));
-    const start = step > 0 ? startSlot : startSlot + span;
-    const seq = Array.from({ length: n + 1 }, (_, i) => start + i * step);
-    const missing = lvl.missingInside && Math.random() < 0.5 ? rand(1, n - 1) : n;
-    const answer = seq[missing];
-    return { seq, missing, answer, choices: makeChoices(answer, 0, max, 3, size >= 5 ? size : 1), step };
-  }
-
   function patternTask() {
     const lvl = PATTERN_LEVELS[state.pattern.level - 1];
-    const isNumber = lvl.type === 'number';
-    const p = isNumber ? numberPattern(lvl) : shapePattern(lvl);
+    const p = L.patternTask(rng, lvl, PATTERN_THEMES);
+    const isNumber = p.isNumber;
     task = { answer: p.answer, mistakes: 0, done: false };
 
     const prompt = p.missing === p.seq.length - 1 ? P.patternNext : P.patternMissing;
@@ -692,7 +579,7 @@
     clearTimeout(resetArmed);
     resetArmed = null;
     resetBtn.textContent = resetLabel;
-    state = { ...defaultState(), settings: state.settings };
+    state = { ...L.defaultState(), settings: state.settings };
     save();
     renderParent();
   });
