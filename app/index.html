@@ -61,6 +61,10 @@
           </span>
         </button>
       </div>
+      <div class="install-bar" id="install-bar" hidden>
+        <button class="install-btn" id="install-btn" type="button">📲 Installér appen</button>
+        <button class="install-later" id="install-later" type="button">Ikke nu</button>
+      </div>
       <button id="parent-btn" class="parent-btn" aria-label="Voksen-indstillinger (hold nede)">⚙️</button>
       <p class="parent-hint" id="parent-hint" hidden>Voksne: hold knappen nede</p>
     </section>
@@ -147,6 +151,11 @@
 
         <section class="panel">
           <h3>Indstillinger</h3>
+          <div class="field">
+            <span>App på startskærmen</span>
+            <p class="note" id="install-status"></p>
+            <button class="small-btn" id="install-btn-parent" type="button" hidden>📲 Installér appen</button>
+          </div>
           <label class="field">
             <span>Barnets navn</span>
             <input id="set-name" type="text" maxlength="20" autocomplete="off">
@@ -169,6 +178,13 @@
       </div>
     </section>
   </main>
+  <dialog class="install-help" id="install-help" aria-labelledby="install-help-title">
+    <h2 id="install-help-title">Læg appen på startskærmen</h2>
+    <p class="note" id="install-browser"></p>
+    <ol class="install-steps" id="install-steps"></ol>
+    <p class="note">Så får appen sit eget ikon, åbner i fuld skærm og virker også uden internet.</p>
+    <button class="big-action math" id="install-help-close" type="button">OK</button>
+  </dialog>
   <div id="celebrate" class="celebrate" aria-hidden="true"></div>
   <script src="js/data.js"></script>
   <script src="js/logic.js"></script>

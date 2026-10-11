@@ -235,6 +235,29 @@
     state.customWords = state.customWords.filter((w) => w.word !== word);
   }
 
+  // ---------- Installation ----------
+
+  // Vejledning til at lægge appen på startskærmen, ud fra browserens user agent.
+  // Bruges når browseren ikke selv tilbyder en installér-dialog (beforeinstallprompt).
+  function installGuide(ua) {
+    const s = String(ua || '');
+    const ios = /iPhone|iPad|iPod/i.test(s) || (/Macintosh/i.test(s) && /Mobile/i.test(s));
+    if (ios) {
+      return { browser: 'iPad/iPhone', steps: ['Åbn siden i Safari.', 'Tryk på Del-knappen (firkant med pil op).', 'Vælg "Føj til hjemmeskærm" og tryk "Tilføj".'] };
+    }
+    if (/SamsungBrowser/i.test(s)) {
+      return { browser: 'Samsung Internet', steps: ['Tryk på menuen ☰ (de tre streger).', 'Vælg "Tilføj side til".', 'Vælg "Startskærm" og tryk "Tilføj".'] };
+    }
+    if (/Firefox|FxiOS/i.test(s)) {
+      return { browser: 'Firefox', steps: ['Tryk på menuen ⋮ (de tre prikker).', 'Vælg "Installér" eller "Føj til startskærm".'] };
+    }
+    if (/Android/i.test(s)) {
+      const name = /EdgA/i.test(s) ? 'Edge' : 'Chrome';
+      return { browser: name, steps: ['Tryk på menuen ⋮ (de tre prikker) øverst til højre.', 'Vælg "Installér app" eller "Føj til startskærm".', 'Tryk "Installér".'] };
+    }
+    return { browser: 'computer', steps: ['Klik på installér-ikonet i adresselinjen (en skærm med en pil).', 'Eller åbn browserens menu og vælg "Installér Stav og Regn".'] };
+  }
+
   // ---------- Stave ----------
 
   // recent: de senest viste ord (ændres), så det samme ord ikke kommer igen med det samme.
@@ -341,7 +364,7 @@
     LEVEL_UP_AFTER, LEVEL_DOWN_AFTER, AREAS, ROUND_LENGTH, HISTORY_MAX,
     newRound, roundStep, saveRound, localDate, awardStickers,
     HARD_WORD_CHANCE, HARD_UNTIL_OK, recordWord, hardWords, weekSummary, completeTask,
-    CUSTOM_WORD_MAX, parseCustomWord, addCustomWord, removeCustomWord,
+    CUSTOM_WORD_MAX, parseCustomWord, addCustomWord, removeCustomWord, installGuide,
     rand, pick, shuffle,
     defaultState, normalizeState, recordResult,
     pickWord, spellTask, makeChoices, mathTask, patternTask,

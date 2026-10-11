@@ -560,6 +560,36 @@ button:focus-visible, input:focus-visible {
 .sticker.missing .sticker-label { color: var(--muted); }
 .sticker.fresh { box-shadow: 0 0 0 3px var(--star), var(--shadow); }
 
+/* ---------- Installér appen ---------- */
+
+.install-bar { display: flex; justify-content: center; align-items: center; gap: var(--space-2); margin-top: var(--space-5); flex-wrap: wrap; }
+.install-btn {
+  min-height: 48px;
+  padding: 0 var(--space-5);
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--math-dark);
+  font-weight: 700;
+  font-size: var(--text-m);
+  box-shadow: var(--shadow);
+}
+.install-btn:active { transform: translateY(3px); box-shadow: 0 2px 0 var(--shadow-color); }
+.install-later { min-height: 44px; padding: 0 var(--space-3); background: transparent; color: var(--muted); text-decoration: underline; }
+
+.install-help {
+  width: min(92vw, 460px);
+  border: 0;
+  border-radius: var(--radius-l);
+  padding: var(--space-5);
+  background: var(--card);
+  color: var(--ink);
+  box-shadow: var(--shadow-lift);
+}
+.install-help::backdrop { background: rgba(43, 45, 66, 0.45); }
+.install-help h2 { margin: 0 0 var(--space-2); font-size: var(--text-l); text-wrap: balance; }
+.install-steps { margin: var(--space-3) 0; padding-left: 1.4em; display: grid; gap: var(--space-2); font-size: var(--text-m); }
+.install-help .big-action { width: 100%; margin-top: var(--space-3); }
+
 /* ---------- Fejring ---------- */
 
 .celebrate { position: fixed; inset: 0; pointer-events: none; overflow: hidden; }

@@ -157,6 +157,7 @@
       stopSpeech();
     }
     if (name === 'home') renderHome();
+    if (name === 'home' || name === 'parent') updateInstallUi();
     if (name === 'parent') renderParent();
     if (name === 'album') renderAlbum();
   }
@@ -913,6 +914,72 @@
 
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) stopSpeech();
+  });
+
+  // ---------- Installér appen ----------
+  //
+  // Chrome/Edge på Android sender beforeinstallprompt: så åbner knappen browserens egen dialog.
+  // Andre browsere (Samsung Internet, Firefox, iPad) får en kort vejledning til netop dem.
+
+  const INSTALL_HIDE_KEY = 'stav-og-regn-install-skjult';
+  let deferredInstall = null;
+
+  const isInstalled = () => window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+  function installHidden() {
+    try { return localStorage.getItem(INSTALL_HIDE_KEY) === '1'; } catch (e) { return false; }
+  }
+
+  function updateInstallUi() {
+    const installed = isInstalled();
+    const label = deferredInstall ? '📲 Installér appen' : '📲 Sådan installerer du appen';
+    $('#install-bar').hidden = installed || installHidden();
+    $('#install-btn').textContent = label;
+    const parentBtn = $('#install-btn-parent');
+    parentBtn.hidden = installed;
+    parentBtn.textContent = label;
+    $('#install-status').textContent = installed
+      ? 'Appen er installeret og kører fra startskærmen. 👍'
+      : deferredInstall
+        ? 'Browseren er klar til at installere appen.'
+        : 'Lægges på startskærmen via browserens menu – se vejledningen.';
+  }
+
+  async function installApp() {
+    if (deferredInstall) {
+      const prompt = deferredInstall;
+      deferredInstall = null;
+      prompt.prompt();
+      try { await prompt.userChoice; } catch (e) { /* dialogen blev lukket */ }
+      updateInstallUi();
+      return;
+    }
+    const guide = L.installGuide(navigator.userAgent);
+    $('#install-browser').textContent = `Sådan gør du i ${guide.browser}:`;
+    $('#install-steps').replaceChildren(...guide.steps.map((step) => el('li', null, step)));
+    const dlg = $('#install-help');
+    if (dlg.showModal) dlg.showModal();
+    else dlg.setAttribute('open', '');
+  }
+
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault(); // vi viser vores egen knap i stedet for browserens banner
+    deferredInstall = e;
+    updateInstallUi();
+  });
+  window.addEventListener('appinstalled', () => {
+    deferredInstall = null;
+    updateInstallUi();
+  });
+  $('#install-btn').addEventListener('click', installApp);
+  $('#install-btn-parent').addEventListener('click', installApp);
+  $('#install-later').addEventListener('click', () => {
+    try { localStorage.setItem(INSTALL_HIDE_KEY, '1'); } catch (e) { /* ignorer */ }
+    updateInstallUi();
+  });
+  $('#install-help-close').addEventListener('click', () => {
+    const dlg = $('#install-help');
+    if (dlg.close) dlg.close();
+    else dlg.removeAttribute('open');
   });
 
   // ---------- Start ----------

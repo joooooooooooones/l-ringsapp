@@ -304,3 +304,15 @@ test('svære ord: kun ord der kan komme lige nu, når der gives en liste', () =>
   const state = L.normalizeState({ wordStats: { fisk: { seen: 1, misses: 1, okInRow: 0 }, kat: { seen: 1, misses: 1, okInRow: 0 } } }, null);
   assert.deepEqual(L.hardWords(state, new Set(['kat', 'sol'])).map((h) => h.word), ['kat']);
 });
+
+test('installation: vejledning passer til browseren', () => {
+  const g = (ua) => L.installGuide(ua).browser;
+  assert.equal(g('Mozilla/5.0 (Linux; Android 14; SM-X200) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/25.0 Chrome/121.0 Mobile Safari/537.36'), 'Samsung Internet');
+  assert.equal(g('Mozilla/5.0 (Linux; Android 14; SM-X200) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36'), 'Chrome');
+  assert.equal(g('Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Mobile Safari/537.36 EdgA/128.0'), 'Edge');
+  assert.equal(g('Mozilla/5.0 (Android 14; Mobile; rv:130.0) Gecko/130.0 Firefox/130.0'), 'Firefox');
+  assert.equal(g('Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1'), 'iPad/iPhone');
+  assert.equal(g('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36'), 'computer');
+  assert.equal(g(undefined), 'computer');
+  for (const ua of ['SamsungBrowser Android', 'Android Chrome', 'iPad', 'Firefox', 'Windows']) assert.ok(L.installGuide(ua).steps.length >= 2);
+});
