@@ -816,6 +816,9 @@
 
   function renderParent() {
     freshWords = new Set();
+    backupMessage();
+    $('#backup-confirm').hidden = true;
+    pendingBackup = null;
     $('#set-name').value = state.settings.name;
     $('#set-upper').checked = state.settings.uppercase;
     $('#set-sound').checked = state.settings.sound;
@@ -840,6 +843,7 @@
     }));
     if (!hard.length) chips.append(el('p', 'note', 'Ingen svære ord lige nu. 🎉'));
     $('#voice-status').textContent = `${audio.available.size} lydklip installeret.`;
+    renderBackup();
   }
 
   const AREA_NAMES = { spell: 'Stave', math: 'Regne', pattern: 'Mønstre', words: 'Ugens ord' };
@@ -1117,6 +1121,124 @@
     save();
     renderParent();
   }));
+  // ---------- Sikkerhedskopi ----------
+
+  const BACKUP_DATE_KEY = 'stav-og-regn-sidste-kopi';
+  let pendingBackup = null; // indlæst fil, der venter på bekræftelse
+
+  function lastBackupDate() {
+    try { return localStorage.getItem(BACKUP_DATE_KEY) || ''; } catch (e) { return ''; }
+  }
+
+  const longDate = (d) => d.toLocaleDateString('da-DK', { day: 'numeric', month: 'long', year: 'numeric' });
+
+  async function renderBackup() {
+    const last = lastBackupDate();
+    const [y, m, d] = last.split('-').map(Number);
+    let persisted = false;
+    try {
+      // Beder browseren om ikke at rydde data, når enheden mangler plads (voksen er til stede her).
+      if (navigator.storage && navigator.storage.persist) persisted = (await navigator.storage.persisted()) || (await navigator.storage.persist());
+    } catch (e) { /* ikke understøttet */ }
+    $('#backup-status').textContent = [
+      'Alt gemmes kun på denne enhed. Gem en kopi, før du skifter telefon eller rydder browseren – den kan gendannes på en ny enhed.',
+      last ? `Senest gemt: ${longDate(new Date(y, m - 1, d))}.` : 'Der er ikke gemt en sikkerhedskopi endnu.',
+      persisted ? '' : 'Browseren kan rydde appens data, hvis enheden mangler plads.',
+    ].filter(Boolean).join(' ');
+  }
+
+  function backupMessage(ok, err) {
+    $('#backup-ok').textContent = ok || '';
+    $('#backup-ok').hidden = !ok;
+    $('#backup-error').textContent = err || '';
+    $('#backup-error').hidden = !err;
+  }
+
+  $('#backup-save').addEventListener('click', async () => {
+    backupMessage();
+    try {
+      const recs = await R.all();
+      const recordings = recs
+        .filter((r) => state.customWords.some((w) => w.word === r.word))
+        .map((r) => ({ word: r.word, type: r.type, bytes: new Uint8Array(r.data) }));
+      const today = L.localDate(new Date());
+      const json = JSON.stringify(L.makeBackup(state, recordings, new Date().toISOString()));
+      const name = L.backupFileName(state.settings.name, today);
+      const file = new File([json], name, { type: 'application/json' });
+      let shared = false;
+      // Telefon: del-menuen giver mulighed for at gemme i Drev, Filer eller sende på mail.
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        try {
+          await navigator.share({ files: [file], title: 'Stav og Regn – sikkerhedskopi' });
+          shared = true;
+        } catch (e) {
+          if (e && e.name === 'AbortError') return;
+        }
+      }
+      if (!shared) {
+        const a = el('a');
+        a.href = URL.createObjectURL(file);
+        a.download = name;
+        document.body.append(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+      }
+      try { localStorage.setItem(BACKUP_DATE_KEY, today); } catch (e) { /* ignorer */ }
+      backupMessage(`✓ Sikkerhedskopien "${name}" er gemt.`);
+      renderBackup();
+    } catch (e) {
+      backupMessage('', 'Sikkerhedskopien kunne ikke gemmes. Prøv igen.');
+    }
+  });
+
+  $('#backup-load').addEventListener('click', () => {
+    backupMessage();
+    $('#backup-file').value = '';
+    $('#backup-file').click();
+  });
+
+  $('#backup-file').addEventListener('change', async (e) => {
+    const f = e.target.files && e.target.files[0];
+    if (!f) return;
+    const r = L.parseBackup(await f.text(), LEVEL_COUNTS);
+    if (!r.ok) {
+      pendingBackup = null;
+      $('#backup-confirm').hidden = true;
+      backupMessage('', r.error);
+      return;
+    }
+    pendingBackup = r;
+    backupMessage();
+    const s = r.summary;
+    const when = s.exported && !Number.isNaN(Date.parse(s.exported)) ? ` fra ${longDate(new Date(s.exported))}` : '';
+    $('#backup-summary').textContent = `Sikkerhedskopi${when}${s.name ? ` (${s.name})` : ''}: ${s.stars} stjerner · ${s.stickers} klistermærker · ${s.rounds} runder · ${s.words} ugens ord${s.recordings ? ` (${s.recordings} med lyd)` : ''}.`;
+    $('#backup-confirm').hidden = false;
+    $('#backup-apply').focus();
+  });
+
+  $('#backup-cancel').addEventListener('click', () => {
+    pendingBackup = null;
+    $('#backup-confirm').hidden = true;
+  });
+
+  $('#backup-apply').addEventListener('click', async () => {
+    if (!pendingBackup) return;
+    const r = pendingBackup;
+    pendingBackup = null;
+    stopRecording(true);
+    state = r.state;
+    save();
+    // Optagelserne erstattes også: de gamle slettes, kopiens lægges ind.
+    for (const w of await R.words()) await R.remove(w);
+    for (const rec of r.recordings) await R.put({ word: rec.word, type: rec.type, data: rec.bytes.buffer.slice(rec.bytes.byteOffset, rec.bytes.byteOffset + rec.bytes.byteLength) });
+    audio.recorded = new Set(r.recordings.map((rec) => rec.word));
+    for (const k of Array.from(audio.buffers.keys())) if (k.startsWith('rec:')) audio.buffers.delete(k);
+    $('#backup-confirm').hidden = true;
+    renderParent();
+    backupMessage('✓ Sikkerhedskopien er gendannet.');
+  });
+
   twoTapButton($('#reset'), 'Tryk igen for at nulstille', () => {
     state = { ...L.defaultState(), settings: state.settings, customWords: state.customWords };
     save();

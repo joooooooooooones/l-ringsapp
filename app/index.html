@@ -176,6 +176,26 @@
           </div>
         </section>
 
+        <section class="panel" id="backup-panel">
+          <h3>Sikkerhedskopi</h3>
+          <p class="note" id="backup-status"></p>
+          <div class="btn-row">
+            <button class="small-btn primary" id="backup-save" type="button">💾 Gem sikkerhedskopi</button>
+            <button class="small-btn" id="backup-load" type="button">📂 Gendan fra fil</button>
+            <input id="backup-file" type="file" accept=".json,application/json" hidden>
+          </div>
+          <p class="form-error" id="backup-error" role="alert" hidden></p>
+          <div class="confirm" id="backup-confirm" hidden>
+            <p class="confirm-text" id="backup-summary"></p>
+            <p class="note">Fremskridtet på denne enhed bliver erstattet af sikkerhedskopien.</p>
+            <div class="btn-row">
+              <button class="small-btn danger-solid" id="backup-apply" type="button">Erstat med kopien</button>
+              <button class="small-btn" id="backup-cancel" type="button">Annullér</button>
+            </div>
+          </div>
+          <p class="ok-text" id="backup-ok" role="status" hidden></p>
+        </section>
+
         <button class="small-btn danger" id="reset" type="button">Nulstil alt undtagen ugens ord og indstillinger</button>
       </div>
     </section>
