@@ -316,3 +316,24 @@ test('installation: vejledning passer til browseren', () => {
   assert.equal(g(undefined), 'computer');
   for (const ua of ['SamsungBrowser Android', 'Android Chrome', 'iPad', 'Firefox', 'Windows']) assert.ok(L.installGuide(ua).steps.length >= 2);
 });
+
+test('gemt tilstand: forkerte typer (f.eks. fra en importeret fil) bliver til gyldige tal og tekster', () => {
+  const counts = { spell: 4, math: 7, pattern: 6 };
+  const s = L.normalizeState({
+    stars: 'mange',
+    settings: { uppercase: 'ja', sound: 0, name: 42 },
+    spell: { level: 'tre', streak: -2, misses: null, done: 7.6 },
+    math: { level: 2.7 },
+    history: [{ date: '2026-10-11', area: 'spell', total: '10', firstTry: 'x' }, { date: '11/10', area: 'spell', total: 10, firstTry: 5 }],
+  }, counts);
+  assert.equal(s.stars, 0);
+  assert.equal(s.settings.uppercase, true, 'ugyldig værdi giver standard');
+  assert.equal(s.settings.sound, true);
+  assert.equal(s.settings.name, '');
+  assert.deepEqual(s.spell, { level: 1, streak: 0, misses: 0, done: 7 });
+  assert.equal(s.math.level, 2);
+  assert.deepEqual(s.history, [{ date: '2026-10-11', area: 'spell', total: 10, firstTry: 0 }]);
+  // Gyldige data er uændrede.
+  const ok = L.normalizeState({ stars: 5, settings: { uppercase: false, sound: false, name: 'Ida' } }, counts);
+  assert.deepEqual([ok.stars, ok.settings.uppercase, ok.settings.sound, ok.settings.name], [5, false, false, 'Ida']);
+});

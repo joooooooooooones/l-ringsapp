@@ -43,27 +43,45 @@
     };
   }
 
+  // Hele tal ≥ 0; alt andet (tekst, NaN, negative tal) giver fallback.
+  const count = (v, fallback = 0) => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? Math.floor(v) : fallback);
+  const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
   // Fletter gemte data ind i standardværdierne, så ældre gemte data stadig kan åbnes.
+  // Alle værdier typekontrolleres, så også en importeret fil med fejl giver en gyldig tilstand.
   function normalizeState(saved, levelCounts) {
     const d = defaultState();
     const s = saved && typeof saved === 'object' ? saved : {};
-    const state = { ...d, ...s, settings: { ...d.settings, ...s.settings } };
+    const set = s.settings && typeof s.settings === 'object' ? s.settings : {};
+    const state = { ...d, ...s };
+    state.stars = count(s.stars);
+    state.settings = { ...d.settings };
+    for (const [k, v] of Object.entries(d.settings)) if (typeof set[k] === typeof v) state.settings[k] = set[k];
     state.stickers = Array.isArray(s.stickers) ? Array.from(new Set(s.stickers.filter((x) => typeof x === 'string'))) : [];
-    state.stickersSeen = Math.min(Number.isInteger(s.stickersSeen) ? s.stickersSeen : state.stickers.length, state.stickers.length);
+    state.stickersSeen = Math.min(count(s.stickersSeen, state.stickers.length), state.stickers.length);
     state.wordStats = {};
     if (s.wordStats && typeof s.wordStats === 'object') {
       for (const [w, v] of Object.entries(s.wordStats)) {
-        if (v && typeof v === 'object') state.wordStats[w] = { seen: v.seen | 0, misses: v.misses | 0, okInRow: v.okInRow | 0 };
+        if (v && typeof v === 'object') state.wordStats[w] = { seen: count(v.seen), misses: count(v.misses), okInRow: count(v.okInRow) };
       }
     }
     state.customWords = Array.isArray(s.customWords)
       ? s.customWords.filter((w) => w && parseCustomWord(String(w.word)).ok).map((w) => ({ word: w.word }))
       : [];
-    state.history = Array.isArray(s.history) ? s.history.filter((r) => r && typeof r.date === 'string') : [];
+    state.history = Array.isArray(s.history)
+      ? s.history
+        .filter((r) => r && typeof r.date === 'string' && DATE_RE.test(r.date) && typeof r.area === 'string')
+        .map((r) => ({ date: r.date, area: r.area, total: count(Number(r.total)), firstTry: count(Number(r.firstTry)) }))
+      : [];
     for (const area of AREAS) {
-      state[area] = { ...d[area], ...s[area] };
+      const p = s[area] && typeof s[area] === 'object' ? s[area] : {};
       const max = levelCounts ? levelCounts[area] : Infinity;
-      state[area].level = Math.min(Math.max(1, state[area].level), max);
+      state[area] = {
+        level: Math.min(Math.max(1, count(p.level, 1)), max),
+        streak: count(p.streak),
+        misses: count(p.misses),
+        done: count(p.done),
+      };
     }
     return state;
   }
