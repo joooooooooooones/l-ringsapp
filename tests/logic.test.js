@@ -418,3 +418,19 @@ test('sikkerhedskopi: filnavn med barnets navn og dato, kun sikre tegn', () => {
   assert.equal(L.backupFileName('Åse/Ø', '2026-10-12'), 'stav-og-regn-aase-oe-2026-10-12.json');
   assert.equal(L.backupFileName('', '2026-10-12'), 'stav-og-regn-2026-10-12.json');
 });
+
+test('dagens mål: runder i dag tælles mod målet; standard er 2, 0 slår det fra', () => {
+  const counts = { spell: 4, math: 7, pattern: 6 };
+  assert.equal(L.normalizeState(null, counts).settings.dailyGoal, 2);
+  assert.equal(L.normalizeState({ settings: { dailyGoal: 0 } }, counts).settings.dailyGoal, 0);
+  assert.equal(L.normalizeState({ settings: { dailyGoal: 99 } }, counts).settings.dailyGoal, L.DAILY_GOAL_MAX);
+  assert.equal(L.normalizeState({ settings: { dailyGoal: 1.5 } }, counts).settings.dailyGoal, 2, 'ugyldig = standard');
+  const history = [
+    { date: '2026-10-11', area: 'spell', total: 10, firstTry: 5 },
+    { date: '2026-10-12', area: 'math', total: 10, firstTry: 9 },
+  ];
+  assert.deepEqual(L.dailyProgress(history, '2026-10-12', 2), { done: 1, goal: 2, reached: false });
+  history.push({ date: '2026-10-12', area: 'words', total: 10, firstTry: 3 });
+  assert.deepEqual(L.dailyProgress(history, '2026-10-12', 2), { done: 2, goal: 2, reached: true });
+  assert.deepEqual(L.dailyProgress(history, '2026-10-12', 0), { done: 2, goal: 0, reached: false }, 'slået fra');
+});

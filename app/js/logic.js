@@ -13,6 +13,7 @@
   const AREAS = ['spell', 'math', 'pattern'];
   const ROUND_LENGTH = 10; // opgaver i én runde
   const HISTORY_MAX = 300; // så mange afsluttede runder gemmes
+  const DAILY_GOAL_MAX = 5; // dagens mål: 0 (slået fra) til 5 runder
 
   const rand = (rng, min, max) => Math.floor(rng() * (max - min + 1)) + min;
   const pick = (rng, arr) => arr[Math.floor(rng() * arr.length)];
@@ -31,7 +32,7 @@
   function defaultState() {
     return {
       stars: 0,
-      settings: { uppercase: true, sound: true, name: '' },
+      settings: { uppercase: true, sound: true, name: '', dailyGoal: 2 },
       spell: { level: 1, streak: 0, misses: 0, done: 0 },
       math: { level: 1, streak: 0, misses: 0, done: 0 },
       pattern: { level: 1, streak: 0, misses: 0, done: 0 },
@@ -57,6 +58,8 @@
     state.stars = count(s.stars);
     state.settings = { ...d.settings };
     for (const [k, v] of Object.entries(d.settings)) if (typeof set[k] === typeof v) state.settings[k] = set[k];
+    const goal = state.settings.dailyGoal;
+    state.settings.dailyGoal = Number.isInteger(goal) && goal >= 0 ? Math.min(goal, DAILY_GOAL_MAX) : d.settings.dailyGoal;
     state.stickers = Array.isArray(s.stickers) ? Array.from(new Set(s.stickers.filter((x) => typeof x === 'string'))) : [];
     state.stickersSeen = Math.min(count(s.stickersSeen, state.stickers.length), state.stickers.length);
     state.wordStats = {};
@@ -136,6 +139,12 @@
   function localDate(d) {
     const p = (n) => String(n).padStart(2, '0');
     return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+  }
+
+  // Dagens mål: afsluttede runder i dag (date = ÅÅÅÅ-MM-DD) mod målet. goal 0 = slået fra.
+  function dailyProgress(history, date, goal) {
+    const done = history.filter((r) => r.date === date).length;
+    return { done, goal, reached: goal > 0 && done >= goal };
   }
 
   // ---------- Klistermærker ----------
@@ -505,7 +514,7 @@
   }
 
   return {
-    LEVEL_UP_AFTER, LEVEL_DOWN_AFTER, AREAS, ROUND_LENGTH, HISTORY_MAX,
+    LEVEL_UP_AFTER, LEVEL_DOWN_AFTER, AREAS, ROUND_LENGTH, HISTORY_MAX, DAILY_GOAL_MAX, dailyProgress,
     newRound, roundStep, saveRound, localDate, awardStickers,
     HARD_WORD_CHANCE, HARD_UNTIL_OK, recordWord, hardWords, weekSummary, completeTask,
     CUSTOM_WORD_MAX, parseCustomWord, addCustomWord, addCustomWords, removeCustomWord,
