@@ -266,6 +266,26 @@
     $('#go-words').hidden = n === 0;
     $('#words-level-label').textContent = `${n} ord at øve`;
     $('#album-new').hidden = !(state.stickersSeen < state.stickers.length);
+    renderGoal();
+  }
+
+  const todayProgress = () => L.dailyProgress(state.history, L.localDate(new Date()), state.settings.dailyGoal);
+
+  // Pokaler for dagens mål: en pr. runde, tændt når runden er lavet.
+  function goalCups(p) {
+    const n = Math.max(p.goal, Math.min(p.done, L.DAILY_GOAL_MAX));
+    return Array.from({ length: n }, (_, i) => el('span', i < p.done ? 'goal-cup on' : 'goal-cup', '🏆'));
+  }
+
+  function renderGoal() {
+    const p = todayProgress();
+    const box = $('#goal');
+    box.hidden = p.goal === 0;
+    if (!p.goal) return;
+    box.classList.toggle('reached', p.reached);
+    $('#goal-cups').replaceChildren(...goalCups(p));
+    $('#goal-text').textContent = p.reached ? 'Nået! 🎉' : `${p.done} af ${p.goal} runder`;
+    box.setAttribute('aria-label', p.reached ? `Dagens mål er nået: ${p.done} runder i dag` : `Dagens mål: ${p.done} af ${p.goal} runder`);
   }
 
   $('#go-spell').addEventListener('click', () => startArea('spell'));
@@ -373,6 +393,17 @@
       stars,
       el('p', 'round-sub', `${r.done} opgaver · ${r.firstTry} rigtige i første forsøg`),
     );
+    // Dagens mål: pokalerne vises, og det fejres, når målet lige er nået.
+    const goal = todayProgress();
+    const goalJustReached = goal.reached && goal.done === goal.goal;
+    if (goal.goal) {
+      const g = el('div', 'goal goal-round' + (goal.reached ? ' reached' : ''));
+      const cups = el('span', 'goal-cups');
+      cups.append(...goalCups(goal));
+      g.append(el('span', 'goal-label', 'Dagens mål'), cups, el('span', 'goal-text', goal.reached ? 'Nået! 🎉' : `${goal.done} af ${goal.goal}`));
+      praiseCol.append(g);
+    }
+    if (goalJustReached) praiseCol.querySelector('.round-title').textContent = name ? `Dagens mål er nået, ${name}!` : 'Dagens mål er nået!';
     box.append(praiseCol, rewardCol);
     if (won.length) {
       const reveal = el('button', 'sticker-reveal');
@@ -391,8 +422,8 @@
     $('#task').replaceChildren(box);
     armTask();
     sfx('level');
-    celebrate(40);
-    say(P.roundDone, ...(won.length ? [P.newSticker, ...won.map((st) => st.name)] : []));
+    celebrate(goalJustReached ? 70 : 40);
+    say(goalJustReached ? P.goalReached : P.roundDone, ...(won.length ? [P.newSticker, ...won.map((st) => st.name)] : []));
     again.focus();
   }
 
@@ -825,6 +856,8 @@
     $('#spell-level-set').textContent = levelLabel('spell');
     $('#math-level-set').textContent = levelLabel('math');
     $('#pattern-level-set').textContent = levelLabel('pattern');
+    const g = state.settings.dailyGoal;
+    $('#goal-set').textContent = g ? `${g} ${g === 1 ? 'runde' : 'runder'} om dagen` : 'Slået fra';
     renderWeek();
     renderCustomWords();
     $('#stats').textContent =
@@ -1238,6 +1271,13 @@
     renderParent();
     backupMessage('✓ Sikkerhedskopien er gendannet.');
   });
+
+  document.querySelectorAll('[data-goal]').forEach((b) => b.addEventListener('click', () => {
+    const g = state.settings.dailyGoal + Number(b.dataset.goal);
+    state.settings.dailyGoal = Math.min(Math.max(0, g), L.DAILY_GOAL_MAX);
+    save();
+    renderParent();
+  }));
 
   twoTapButton($('#reset'), 'Tryk igen for at nulstille', () => {
     state = { ...L.defaultState(), settings: state.settings, customWords: state.customWords };

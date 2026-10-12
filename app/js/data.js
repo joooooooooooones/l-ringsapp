@@ -235,6 +235,7 @@ window.DATA = {
     newSticker: 'Du har fået et nyt klistermærke!',
     lookAtWord: 'Kig godt på ordet.',
     spellFromMemory: 'Kan du stave det?',
+    goalReached: 'Du har nået dagens mål!',
   },
 
   // Sådan siges bogstaverne på dansk.

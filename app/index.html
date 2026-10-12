@@ -28,6 +28,11 @@
           </button>
         </div>
       </header>
+      <div class="goal" id="goal" role="img" hidden>
+        <span class="goal-label">Dagens mål</span>
+        <span class="goal-cups" id="goal-cups" aria-hidden="true"></span>
+        <span class="goal-text" id="goal-text"></span>
+      </div>
       <div class="area-grid">
         <button class="area-card spell" id="go-spell">
           <span class="area-icon" aria-hidden="true">🔤</span>
@@ -146,6 +151,14 @@
               <button class="small-btn" type="button" data-step="pattern" data-dir="-1" aria-label="Lavere mønstre-niveau">−</button>
               <span id="pattern-level-set"></span>
               <button class="small-btn" type="button" data-step="pattern" data-dir="1" aria-label="Højere mønstre-niveau">+</button>
+            </div>
+          </div>
+          <div class="field">
+            <span>Dagens mål</span>
+            <div class="stepper">
+              <button class="small-btn" type="button" data-goal="-1" aria-label="Færre runder om dagen">−</button>
+              <span id="goal-set"></span>
+              <button class="small-btn" type="button" data-goal="1" aria-label="Flere runder om dagen">+</button>
             </div>
           </div>
           <p class="note">Niveauet skifter også af sig selv: 5 rigtige i træk giver nyt niveau, og 3 svære opgaver i træk går et niveau ned.</p>
