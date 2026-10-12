@@ -9,6 +9,7 @@ const ASSETS = [
   'css/style.css',
   'js/data.js',
   'js/logic.js',
+  'js/recordings.js',
   'js/app.js',
   'fonts/andika-400.woff2',
   'fonts/andika-700.woff2',

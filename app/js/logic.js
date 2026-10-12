@@ -268,6 +268,42 @@
     state.customWords = state.customWords.filter((w) => w.word !== word);
   }
 
+  // ---------- Optag ugens ord ----------
+
+  // Formater i prioriteret rækkefølge: Chrome/Firefox optager webm/ogg (opus), Safari mp4.
+  const RECORDING_TYPES = ['audio/webm;codecs=opus', 'audio/mp4', 'audio/ogg;codecs=opus', 'audio/webm'];
+  function pickRecordingType(isSupported) {
+    return RECORDING_TYPES.find((t) => isSupported(t)) || ''; // '' = browserens standard
+  }
+
+  // Finder ordet i en optagelse: fra første til sidste sample over threshold, plus pad sekunders luft.
+  // Returnerer { start, end } (samples, end eksklusiv) eller null, hvis optagelsen er tavs.
+  function trimSilence(samples, sampleRate, { threshold = 0.02, pad = 0.08 } = {}) {
+    let first = -1;
+    let last = -1;
+    for (let i = 0; i < samples.length; i++) {
+      if (Math.abs(samples[i]) >= threshold) {
+        if (first < 0) first = i;
+        last = i;
+      }
+    }
+    if (first < 0) return null;
+    const p = Math.round(pad * sampleRate);
+    return { start: Math.max(0, first - p), end: Math.min(samples.length, last + 1 + p) };
+  }
+
+  // Forstærkning så en stille optagelse når 0,9 i top (som de indbyggede lydklip), højst 4 gange.
+  function recordingGain(peak) {
+    if (!(peak > 0) || peak >= 0.9) return 1;
+    return Math.min(4, 0.9 / peak);
+  }
+
+  // Optagelser til ord, der ikke længere er på listen (ryddes op, så de ikke fylder).
+  function orphanRecordings(recordedWords, customWords) {
+    const keep = new Set(customWords.map((w) => w.word));
+    return recordedWords.filter((w) => !keep.has(w));
+  }
+
   // ---------- Installation ----------
 
   // Vejledning til at lægge appen på startskærmen, ud fra browserens user agent.
@@ -397,7 +433,8 @@
     LEVEL_UP_AFTER, LEVEL_DOWN_AFTER, AREAS, ROUND_LENGTH, HISTORY_MAX,
     newRound, roundStep, saveRound, localDate, awardStickers,
     HARD_WORD_CHANCE, HARD_UNTIL_OK, recordWord, hardWords, weekSummary, completeTask,
-    CUSTOM_WORD_MAX, parseCustomWord, addCustomWord, addCustomWords, removeCustomWord, installGuide,
+    CUSTOM_WORD_MAX, parseCustomWord, addCustomWord, addCustomWords, removeCustomWord,
+    pickRecordingType, trimSilence, recordingGain, orphanRecordings, installGuide,
     rand, pick, shuffle,
     defaultState, normalizeState, recordResult,
     pickWord, spellTask, makeChoices, mathTask, patternTask,

@@ -350,3 +350,33 @@ test('ugens ord: en hel liste kan tilføjes på én gang; de ugyldige kommer til
   // Ét ord virker som før.
   assert.deepEqual(L.addCustomWords(state, 'bror').added, ['bror']);
 });
+
+test('optagelse: vælger det første lydformat browseren kan optage, ellers browserens standard', () => {
+  assert.equal(L.pickRecordingType((t) => t === 'audio/mp4'), 'audio/mp4');
+  assert.equal(L.pickRecordingType((t) => t.startsWith('audio/webm')), 'audio/webm;codecs=opus');
+  assert.equal(L.pickRecordingType(() => false), '');
+});
+
+test('optagelse: stilhed før og efter ordet skæres fra, og en tavs optagelse afvises', () => {
+  const rate = 100; // 100 samples pr. sekund gør regnestykket nemt
+  const samples = new Float32Array(300); // 3 sekunder
+  for (let i = 120; i < 180; i++) samples[i] = i % 2 ? 0.5 : -0.5; // ordet: 1,2-1,8 s
+  // Med 0,1 s luft på hver side: 1,1 s til 1,9 s.
+  assert.deepEqual(L.trimSilence(samples, rate, { pad: 0.1 }), { start: 110, end: 190 });
+  // Luften går ikke ud over kanten.
+  const edge = new Float32Array(50); edge[0] = 0.9; edge[49] = 0.9;
+  assert.deepEqual(L.trimSilence(edge, rate, { pad: 0.1 }), { start: 0, end: 50 });
+  assert.equal(L.trimSilence(new Float32Array(300).fill(0.005), rate), null, 'kun svag støj = tavs');
+});
+
+test('optagelse: optagelser til ord, der ikke længere er på listen, findes til oprydning', () => {
+  assert.deepEqual(L.orphanRecordings(['hund', 'kat', 'mor'], [{ word: 'kat' }]), ['hund', 'mor']);
+  assert.deepEqual(L.orphanRecordings([], [{ word: 'kat' }]), []);
+});
+
+test('optagelse: stille optagelser forstærkes op til 0,9 i top, men højst 4 gange', () => {
+  assert.equal(L.recordingGain(0.9), 1);
+  assert.equal(L.recordingGain(0.45), 2);
+  assert.equal(L.recordingGain(0.1), 4, 'loft, så støj ikke pustes op');
+  assert.equal(L.recordingGain(1), 1, 'høje optagelser dæmpes ikke');
+});
