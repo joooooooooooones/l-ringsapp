@@ -304,6 +304,81 @@
     return recordedWords.filter((w) => !keep.has(w));
   }
 
+  // ---------- Sikkerhedskopi ----------
+  //
+  // Hele fremskridtet (og forælderens optagelser) som én JSON-fil, der kan gemmes og gendannes,
+  // f.eks. ved skift af telefon. Intet sendes nogen steder hen; filen gemmes af brugeren selv.
+
+  const BACKUP_APP = 'stav-og-regn';
+  const BACKUP_FORMAT = 1;
+  const RECORDING_MAX_BYTES = 2 * 1024 * 1024;
+
+  function bytesToBase64(bytes) {
+    let bin = '';
+    for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+    return btoa(bin);
+  }
+
+  function base64ToBytes(text) {
+    const bin = atob(text); // kaster ved ugyldig base64
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return bytes;
+  }
+
+  // recordings: [{ word, type, bytes (Uint8Array) }]
+  function makeBackup(state, recordings, exportedIso) {
+    return {
+      app: BACKUP_APP,
+      format: BACKUP_FORMAT,
+      exported: exportedIso,
+      state,
+      recordings: recordings.map((r) => ({ word: r.word, type: r.type, data: bytesToBase64(r.bytes) })),
+    };
+  }
+
+  // Returnerer { ok, state, recordings, summary } eller { ok: false, error }.
+  function parseBackup(text, levelCounts) {
+    let b;
+    try { b = JSON.parse(text); } catch (e) { return { ok: false, error: 'Filen kunne ikke læses. Vælg en sikkerhedskopi gemt fra Stav og Regn (.json).' }; }
+    if (!b || typeof b !== 'object' || b.app !== BACKUP_APP || !b.state || typeof b.state !== 'object') {
+      return { ok: false, error: 'Filen er ikke en sikkerhedskopi fra Stav og Regn.' };
+    }
+    if (!(b.format <= BACKUP_FORMAT)) return { ok: false, error: 'Sikkerhedskopien er fra en nyere version af appen. Opdatér appen, og prøv igen.' };
+    const state = normalizeState(b.state, levelCounts);
+    const words = new Set(state.customWords.map((w) => w.word));
+    const recordings = [];
+    for (const r of Array.isArray(b.recordings) ? b.recordings : []) {
+      if (!r || !words.has(r.word) || typeof r.type !== 'string' || typeof r.data !== 'string') continue;
+      if (r.data.length > (RECORDING_MAX_BYTES * 4) / 3 + 4) continue;
+      try {
+        recordings.push({ word: r.word, type: r.type, bytes: base64ToBytes(r.data) });
+      } catch (e) { /* ødelagt optagelse springes over */ }
+    }
+    const exported = typeof b.exported === 'string' ? b.exported : '';
+    return {
+      ok: true,
+      state,
+      recordings,
+      summary: {
+        exported,
+        name: state.settings.name,
+        stars: state.stars,
+        stickers: state.stickers.length,
+        rounds: state.history.length,
+        words: state.customWords.length,
+        recordings: recordings.length,
+      },
+    };
+  }
+
+  function backupFileName(name, date) {
+    const slug = String(name || '').toLocaleLowerCase('da')
+      .replace(/æ/g, 'ae').replace(/ø/g, 'oe').replace(/å/g, 'aa')
+      .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+    return `${BACKUP_APP}-${slug ? slug + '-' : ''}${date}.json`;
+  }
+
   // ---------- Installation ----------
 
   // Vejledning til at lægge appen på startskærmen, ud fra browserens user agent.
@@ -434,7 +509,8 @@
     newRound, roundStep, saveRound, localDate, awardStickers,
     HARD_WORD_CHANCE, HARD_UNTIL_OK, recordWord, hardWords, weekSummary, completeTask,
     CUSTOM_WORD_MAX, parseCustomWord, addCustomWord, addCustomWords, removeCustomWord,
-    pickRecordingType, trimSilence, recordingGain, orphanRecordings, installGuide,
+    pickRecordingType, trimSilence, recordingGain, orphanRecordings,
+    makeBackup, parseBackup, backupFileName, installGuide,
     rand, pick, shuffle,
     defaultState, normalizeState, recordResult,
     pickWord, spellTask, makeChoices, mathTask, patternTask,

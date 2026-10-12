@@ -380,3 +380,41 @@ test('optagelse: stille optagelser forstærkes op til 0,9 i top, men højst 4 ga
   assert.equal(L.recordingGain(0.1), 4, 'loft, så støj ikke pustes op');
   assert.equal(L.recordingGain(1), 1, 'høje optagelser dæmpes ikke');
 });
+
+test('sikkerhedskopi: gem og gendan giver samme fremskridt og samme optagelser', () => {
+  const counts = { spell: 4, math: 7, pattern: 6 };
+  const state = L.normalizeState({
+    stars: 137, settings: { uppercase: false, sound: true, name: 'Ellen' }, spell: { level: 3, streak: 2, misses: 0, done: 80 },
+    stickers: ['drage', 'raket'], stickersSeen: 1, customWords: [{ word: 'hund' }, { word: 'kat' }],
+    history: [{ date: '2026-10-11', area: 'spell', total: 10, firstTry: 7 }], wordStats: { hund: { seen: 2, misses: 1, okInRow: 0 } },
+  }, counts);
+  const bytes = new Uint8Array([0, 1, 2, 250, 255, 128]);
+  const backup = L.makeBackup(state, [{ word: 'hund', type: 'audio/webm', bytes }], '2026-10-12T13:05:00.000Z');
+  const text = JSON.stringify(backup);
+  const r = L.parseBackup(text, counts);
+  assert.equal(r.ok, true);
+  assert.deepEqual(r.state, state);
+  assert.equal(r.recordings.length, 1);
+  assert.equal(r.recordings[0].word, 'hund');
+  assert.equal(r.recordings[0].type, 'audio/webm');
+  assert.deepEqual(Array.from(r.recordings[0].bytes), [0, 1, 2, 250, 255, 128]);
+  assert.deepEqual(r.summary, { exported: '2026-10-12T13:05:00.000Z', name: 'Ellen', stars: 137, stickers: 2, rounds: 1, words: 2, recordings: 1 });
+});
+
+test('sikkerhedskopi: forkerte filer afvises med en forklaring, og fremmede optagelser springes over', () => {
+  const counts = { spell: 4, math: 7, pattern: 6 };
+  assert.match(L.parseBackup('ikke json', counts).error, /kunne ikke læses/);
+  assert.match(L.parseBackup('{"app":"andet"}', counts).error, /ikke en sikkerhedskopi/);
+  assert.match(L.parseBackup(JSON.stringify({ app: 'stav-og-regn', format: 99, state: {} }), counts).error, /nyere version/);
+  const b = L.makeBackup(L.normalizeState({ customWords: [{ word: 'kat' }] }, counts), [], '2026-10-12T13:05:00.000Z');
+  b.recordings = [{ word: 'hund', type: 'audio/webm', data: 'AAEC' }, { word: 'kat', type: 'audio/webm', data: '%%%' }, { word: 'kat', type: 5, data: 'AAEC' }];
+  const r = L.parseBackup(JSON.stringify(b), counts);
+  assert.equal(r.ok, true);
+  assert.equal(r.recordings.length, 0, 'ord der ikke er på listen, ødelagt base64 og forkert type springes over');
+});
+
+test('sikkerhedskopi: filnavn med barnets navn og dato, kun sikre tegn', () => {
+  assert.equal(L.backupFileName('Ellen Sofie', '2026-10-12'), 'stav-og-regn-ellen-sofie-2026-10-12.json');
+  assert.equal(L.backupFileName('Åse/Ø', '2026-10-12'), 'stav-og-regn-aase-oe-2026-10-12.json');
+  assert.equal(L.backupFileName('', '2026-10-12'), 'stav-og-regn-2026-10-12.json');
+});
