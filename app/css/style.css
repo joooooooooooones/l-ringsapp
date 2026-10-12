@@ -42,6 +42,12 @@
   --words-dark: #0f5636;
   --words-soft: #dff5e9;
 
+  /* Det aktive område på spilleskærmen (sættes med data-area på body) */
+  --area: var(--math);
+  --area-dark: var(--math-dark);
+  --area-soft: var(--spell-soft);
+  --area-current: var(--spell);
+
   /* Tilstande */
   --good: #16804f;
   --good-dark: #0f5c38;
@@ -279,7 +285,7 @@ button:focus-visible, input:focus-visible {
   font-weight: 700;
   background: var(--slot-bg);
 }
-.slot.current { border-color: var(--spell); border-style: solid; background: var(--card); box-shadow: 0 0 0 4px var(--spell-soft); }
+.slot.current { border-color: var(--area-current); border-style: solid; background: var(--card); box-shadow: 0 0 0 4px var(--area-soft); }
 .slot.given { border-style: solid; border-color: transparent; background: transparent; color: var(--muted); }
 .slot.filled { border-style: solid; border-color: var(--good); background: var(--good-soft); color: var(--ink); }
 
@@ -386,14 +392,14 @@ button:focus-visible, input:focus-visible {
   height: 86px;
   padding: 0 12px;
   border-radius: 20px;
-  background: var(--math);
+  background: var(--area);
   color: var(--on-color);
   font-size: 2.6rem;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
-  box-shadow: 0 6px 0 var(--math-dark);
+  box-shadow: 0 6px 0 var(--area-dark);
 }
-.choice:active { transform: translateY(4px); box-shadow: 0 2px 0 var(--math-dark); }
+.choice:active { transform: translateY(4px); box-shadow: 0 2px 0 var(--area-dark); }
 .choice.right { background: var(--good); box-shadow: 0 6px 0 var(--good-dark); }
 .choice.wrong { background: var(--line); color: var(--ink); box-shadow: none; opacity: 0.6; }
 .choice.choice-emoji { background: var(--card); color: var(--ink); box-shadow: var(--shadow); font-size: 2.8rem; }
