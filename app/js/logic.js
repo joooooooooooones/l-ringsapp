@@ -249,6 +249,21 @@
     return r;
   }
 
+  // Tilføjer en hel liste, f.eks. "hund, kat mor" (adskilt af mellemrum, komma, semikolon eller linjeskift).
+  // Returnerer { added: [ord], rejected: [{ text, error }] } i samme rækkefølge som skrevet.
+  function addCustomWords(state, text) {
+    const parts = String(text).split(/[\s,;]+/).filter(Boolean);
+    if (!parts.length) return { added: [], rejected: [{ text: '', error: parseCustomWord('').error }] };
+    const added = [];
+    const rejected = [];
+    for (const part of parts) {
+      const r = addCustomWord(state, part);
+      if (r.ok) added.push(r.word);
+      else rejected.push({ text: part, error: r.error });
+    }
+    return { added, rejected };
+  }
+
   function removeCustomWord(state, word) {
     state.customWords = state.customWords.filter((w) => w.word !== word);
   }
@@ -382,7 +397,7 @@
     LEVEL_UP_AFTER, LEVEL_DOWN_AFTER, AREAS, ROUND_LENGTH, HISTORY_MAX,
     newRound, roundStep, saveRound, localDate, awardStickers,
     HARD_WORD_CHANCE, HARD_UNTIL_OK, recordWord, hardWords, weekSummary, completeTask,
-    CUSTOM_WORD_MAX, parseCustomWord, addCustomWord, removeCustomWord, installGuide,
+    CUSTOM_WORD_MAX, parseCustomWord, addCustomWord, addCustomWords, removeCustomWord, installGuide,
     rand, pick, shuffle,
     defaultState, normalizeState, recordResult,
     pickWord, spellTask, makeChoices, mathTask, patternTask,

@@ -337,3 +337,16 @@ test('gemt tilstand: forkerte typer (f.eks. fra en importeret fil) bliver til gy
   const ok = L.normalizeState({ stars: 5, settings: { uppercase: false, sound: false, name: 'Ida' } }, counts);
   assert.deepEqual([ok.stars, ok.settings.uppercase, ok.settings.sound, ok.settings.name], [5, false, false, 'Ida']);
 });
+
+test('ugens ord: en hel liste kan tilføjes på én gang; de ugyldige kommer tilbage med forklaring', () => {
+  const state = L.normalizeState({ customWords: [{ word: 'mor' }] }, null);
+  const r = L.addCustomWords(state, 'Hund, kat;  far\nmor sk0le hund');
+  assert.deepEqual(r.added, ['hund', 'kat', 'far']);
+  assert.deepEqual(r.rejected.map((x) => x.text), ['mor', 'sk0le', 'hund']);
+  assert.match(r.rejected[0].error, /allerede/);
+  assert.match(r.rejected[1].error, /bogstaver/);
+  assert.deepEqual(state.customWords.map((w) => w.word), ['mor', 'hund', 'kat', 'far']);
+  assert.match(L.addCustomWords(state, '  ,  ').rejected[0].error, /Skriv/);
+  // Ét ord virker som før.
+  assert.deepEqual(L.addCustomWords(state, 'bror').added, ['bror']);
+});

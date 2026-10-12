@@ -781,6 +781,7 @@ body[data-area] {
 .small-btn.primary { background: var(--words); color: var(--on-color); box-shadow: 0 3px 0 var(--words-dark); }
 .form-error { margin: 0; color: var(--danger-ink); font-weight: 700; font-size: var(--text-s); }
 .words-chip { background: var(--words-soft); align-items: center; padding-right: 4px; }
+.words-chip.fresh { box-shadow: 0 0 0 2px var(--words); animation: pop 0.35s; }
 .chip-remove {
   display: grid;
   place-items: center;

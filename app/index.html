@@ -98,9 +98,10 @@
         <section class="panel">
           <h3>Ugens ord</h3>
           <form class="word-form" id="word-form" autocomplete="off">
-            <input id="word-input" type="text" maxlength="30" placeholder="Skriv et ord fra skolen" aria-label="Nyt ord" autocapitalize="none" spellcheck="false">
+            <input id="word-input" type="text" maxlength="400" placeholder="Fx: hund, kat, mor" aria-label="Nye ord – gerne flere på én gang" aria-describedby="word-help" autocapitalize="none" spellcheck="false" enterkeyhint="done">
             <button class="small-btn primary" type="submit">Tilføj</button>
           </form>
+          <p class="note" id="word-help">Skriv ét eller flere ord, adskilt af mellemrum eller komma.</p>
           <p class="form-error" id="word-error" role="alert" hidden></p>
           <div class="chips" id="custom-words"></div>
           <p class="note" id="words-note"></p>

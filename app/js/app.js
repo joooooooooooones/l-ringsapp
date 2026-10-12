@@ -732,6 +732,7 @@
 
   const parentBtn = $('#parent-btn');
   let holdTimer = null;
+  let freshWords = new Set(); // ord tilføjet lige nu – fremhæves i listen
 
   parentBtn.addEventListener('pointerdown', (e) => {
     e.preventDefault();
@@ -753,6 +754,7 @@
   parentBtn.addEventListener('contextmenu', (e) => e.preventDefault());
 
   function renderParent() {
+    freshWords = new Set();
     $('#set-name').value = state.settings.name;
     $('#set-upper').checked = state.settings.uppercase;
     $('#set-sound').checked = state.settings.sound;
@@ -823,7 +825,7 @@
   function renderCustomWords() {
     const list = $('#custom-words');
     list.replaceChildren(...state.customWords.map(({ word }) => {
-      const c = el('span', 'chip words-chip');
+      const c = el('span', 'chip words-chip' + (freshWords.has(word) ? ' fresh' : ''));
       const remove = el('button', 'chip-remove', '×');
       remove.setAttribute('aria-label', `Fjern ${word}`);
       remove.addEventListener('click', () => {
@@ -845,20 +847,24 @@
   $('#word-form').addEventListener('submit', (e) => {
     e.preventDefault();
     const input = $('#word-input');
-    const r = L.addCustomWord(state, input.value);
+    const { added, rejected } = L.addCustomWords(state, input.value);
     const err = $('#word-error');
-    if (!r.ok) {
-      err.textContent = r.error;
+    if (added.length) {
+      freshWords = new Set(added);
+      save();
+      renderCustomWords();
+    }
+    // De afviste ord bliver stående i feltet, så de kan rettes.
+    input.value = rejected.map((r) => r.text).join(' ');
+    if (rejected.length) {
+      err.textContent = rejected.map((r) => (r.text ? `"${r.text}": ${r.error}` : r.error)).join(' ');
       err.hidden = false;
       input.setAttribute('aria-invalid', 'true');
-      return;
+    } else {
+      err.hidden = true;
+      input.removeAttribute('aria-invalid');
     }
-    err.hidden = true;
-    input.removeAttribute('aria-invalid');
-    input.value = '';
     input.focus();
-    save();
-    renderCustomWords();
   });
   $('#word-input').addEventListener('input', () => {
     $('#word-error').hidden = true;
