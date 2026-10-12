@@ -9,9 +9,11 @@
 
   // ---------- Gemt tilstand (kun på enheden, ingen server) ----------
 
+  let loadedSaved = false; // blev der faktisk indlæst gemte data (ellers ryddes optagelser ikke op)
   function load() {
     let saved = null;
     try { saved = JSON.parse(localStorage.getItem(STORE_KEY)); } catch (e) { /* tom eller ødelagt lagring: start forfra */ }
+    loadedSaved = !!(saved && typeof saved === 'object');
     return L.normalizeState(saved, LEVEL_COUNTS);
   }
 
@@ -52,9 +54,12 @@
   };
 
   const R = window.RECORDINGS;
+  let recordingsPersistent = true;
+  R.persistent().then((p) => { recordingsPersistent = p; });
   R.words().then((words) => {
-    // Optagelser til ord, der ikke længere er på listen, ryddes op.
-    const orphans = L.orphanRecordings(words, state.customWords);
+    // Optagelser til ord, der ikke længere er på listen, ryddes op – men kun når de gemte data
+    // faktisk kunne læses; ellers ville en ødelagt eller ryddet lagring også slette optagelserne.
+    const orphans = loadedSaved ? L.orphanRecordings(words, state.customWords) : [];
     orphans.forEach((w) => R.remove(w));
     audio.recorded = new Set(words.filter((w) => !orphans.includes(w)));
     if (!$('#screen-parent').hidden) renderCustomWords();
@@ -103,7 +108,12 @@
       audio.buffers.set(key, R.get(word)
         .then((rec) => (rec ? ctx.decodeAudioData(rec.data.slice(0)) : null))
         .then((buf) => (buf ? prepareRecording(ctx, buf) : null))
-        .catch(() => null));
+        .catch(() => null)
+        .then((buf) => {
+          // Kan optagelsen ikke afspilles her (f.eks. et format fra en anden enhed), vises den ikke som lyd.
+          if (!buf && audio.recorded.delete(word) && !$('#screen-parent').hidden) renderCustomWords();
+          return buf;
+        }));
     }
     return audio.buffers.get(key);
   }
@@ -218,7 +228,15 @@
       if (typeof reloadIfHome === 'function') setTimeout(reloadIfHome, 0);
     }
     if (name === 'home' || name === 'parent') updateInstallUi();
-    if (name === 'parent') renderParent();
+    if (name === 'parent') {
+      // Beskeder og ventende valg fra sidste besøg ryddes, når siden åbnes (ikke ved hver gentegning).
+      freshWords = new Set();
+      recordError('');
+      backupMessage();
+      $('#backup-confirm').hidden = true;
+      pendingBackup = null;
+      renderParent();
+    }
     if (name === 'album') renderAlbum();
   }
 
@@ -846,10 +864,6 @@
   parentBtn.addEventListener('contextmenu', (e) => e.preventDefault());
 
   function renderParent() {
-    freshWords = new Set();
-    backupMessage();
-    $('#backup-confirm').hidden = true;
-    pendingBackup = null;
     $('#set-name').value = state.settings.name;
     $('#set-upper').checked = state.settings.uppercase;
     $('#set-sound').checked = state.settings.sound;
@@ -950,9 +964,10 @@
     list.replaceChildren(...state.customWords.map(({ word }) => {
       const row = el('div', 'word-row' + (freshWords.has(word) ? ' fresh' : ''));
       const recording = recorder && recorder.word === word;
+      const starting = startingWord === word;
       const has = audio.recorded.has(word);
       const name = el('span', 'word-row-name');
-      name.append(el('strong', null, word), el('span', 'word-row-status', recording ? '● Sig ordet nu …' : has ? '✓ Din stemme' : hasVoice(word) ? 'Indbygget lyd' : 'Ingen lyd endnu'));
+      name.append(el('strong', null, word), el('span', 'word-row-status', recording ? '● Sig ordet nu …' : starting ? 'Starter mikrofonen …' : has ? '✓ Din stemme' : hasVoice(word) ? 'Indbygget lyd' : 'Ingen lyd endnu'));
       row.append(name);
       if (has && !recording) {
         const play = el('button', 'small-btn', '▶ Hør');
@@ -965,6 +980,7 @@
         const rec = el('button', 'small-btn ' + (recording ? 'rec-stop' : has ? '' : 'rec'), recording ? '■ Stop' : has ? '🎤 Igen' : '🎤 Optag');
         rec.type = 'button';
         rec.setAttribute('aria-label', recording ? 'Stop optagelsen' : `Optag ${word} med din stemme`);
+        rec.disabled = !!startingWord;
         rec.addEventListener('click', () => (recording ? stopRecording() : recordWord(word)));
         row.append(rec);
       }
@@ -972,7 +988,20 @@
       remove.type = 'button';
       remove.setAttribute('aria-label', `Fjern ${word}`);
       remove.addEventListener('click', () => {
-        if (recorder && recorder.word === word) stopRecording(true);
+        // Har ordet en optagelse, kræves to tryk, så den ikke slettes ved et uheld.
+        if (has && !remove.classList.contains('armed')) {
+          remove.classList.add('armed');
+          remove.textContent = 'Slet?';
+          remove.setAttribute('aria-label', `Tryk igen for at slette ${word} og optagelsen`);
+          setTimeout(() => {
+            remove.classList.remove('armed');
+            remove.textContent = '×';
+            remove.setAttribute('aria-label', `Fjern ${word}`);
+          }, 4000);
+          return;
+        }
+        recordError('');
+        if ((recorder && recorder.word === word) || startingWord === word) stopRecording(true);
         L.removeCustomWord(state, word);
         forgetCustomStats([word]);
         forgetRecordings([word]);
@@ -988,6 +1017,8 @@
       ? 'Skriv ugens ord fra skolen, så kan de øves under "Ugens ord" på forsiden.'
       : !canRecord
         ? `${n} ord. De øves under "Ugens ord" på forsiden. Denne browser kan ikke optage lyd, så læs gerne ordene højt sammen med barnet.`
+        : !recordingsPersistent
+          ? `${n} ord. Denne browser (måske et privat vindue) kan ikke gemme optagelser, efter appen lukkes. Brug en almindelig fane eller den installerede app.`
         : missing
           ? `${n} ord. Tryk 🎤 Optag og sig ordet tydeligt, så bliver det læst op med din stemme, og barnet kan øve alene. ${missing} mangler lyd.`
           : `${n} ord, alle med lyd. De øves under "Ugens ord" på forsiden: ordet læses op, vises, skjules og staves med brikker.`;
@@ -1015,33 +1046,51 @@
     return 'Optagelsen kunne ikke starte. Prøv igen.';
   }
 
+  let recordSeq = 0; // tæller op ved hver start og stop, så en forsinket mikrofon-tilladelse kan opdages
+  let startingWord = null; // ord, hvor mikrofonen er ved at starte
+
   async function recordWord(word) {
-    if (recorder) stopRecording(true);
+    stopRecording(true);
+    const seq = ++recordSeq;
     stopSpeech();
     recordError('');
     audioCtx(); // lydsystemet skal startes i selve trykket (iPad/iPhone)
+    startingWord = word;
+    renderCustomWords();
     let stream;
     try {
       stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
     } catch (e) {
-      recordError(micErrorText(e));
+      if (seq === recordSeq) {
+        startingWord = null;
+        recordError(micErrorText(e));
+        renderCustomWords();
+      }
       return;
     }
+    const stopTracks = () => stream.getTracks().forEach((t) => t.stop());
+    // Er der trykket på noget andet, eller er voksensiden forladt imens? Så optages der ikke.
+    if (seq !== recordSeq || $('#screen-parent').hidden || !state.customWords.some((w) => w.word === word)) {
+      stopTracks();
+      return;
+    }
+    startingWord = null;
     const type = L.pickRecordingType((t) => MediaRecorder.isTypeSupported(t));
     let mr;
     try {
       mr = type ? new MediaRecorder(stream, { mimeType: type }) : new MediaRecorder(stream);
     } catch (e) {
-      stream.getTracks().forEach((t) => t.stop());
+      stopTracks();
       recordError('Optagelsen kunne ikke starte. Prøv igen.');
+      renderCustomWords();
       return;
     }
     const chunks = [];
-    const me = { word, mr, stream, timer: null, cancelled: false };
+    const me = { word, mr, timer: null, cancelled: false };
     recorder = me;
     mr.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
     mr.onstop = () => {
-      stream.getTracks().forEach((t) => t.stop());
+      stopTracks();
       clearTimeout(me.timer);
       if (recorder === me) recorder = null;
       if (me.cancelled) {
@@ -1051,12 +1100,18 @@
       saveRecording(word, new Blob(chunks, { type: mr.mimeType || type || 'audio/webm' }));
     };
     mr.start();
-    me.timer = setTimeout(() => stopRecording(), RECORD_MAX_MS);
+    // Timeren stopper sin egen optagelse – aldrig en anden, der er startet siden.
+    me.timer = setTimeout(() => { if (mr.state !== 'inactive') mr.stop(); }, RECORD_MAX_MS);
     renderCustomWords();
   }
 
   // cancel: afbryd uden at gemme (f.eks. når voksensiden forlades midt i en optagelse).
+  // Afbryder også en mikrofon, der er ved at starte.
   function stopRecording(cancel) {
+    if (startingWord) {
+      recordSeq++;
+      startingWord = null;
+    }
     if (!recorder) return;
     recorder.cancelled = !!cancel;
     clearTimeout(recorder.timer);
@@ -1071,10 +1126,15 @@
       if (!buf || !L.trimSilence(buf.getChannelData(0), buf.sampleRate)) {
         recordError(`Der kom ingen lyd med på "${word}". Hold telefonen tæt på munden, og prøv igen.`);
       } else if (state.customWords.some((w) => w.word === word)) {
-        await R.put({ word, type: blob.type, data });
-        audio.recorded.add(word);
-        audio.buffers.delete('rec:' + word);
-        speak([word], true); // afspil med det samme, så forælderen kan høre, om den er god
+        if (!(await R.put({ word, type: blob.type, data }))) {
+          recordError('Optagelsen kunne ikke gemmes på enheden (er lageret fuldt?). Prøv igen.');
+        } else if (!state.customWords.some((w) => w.word === word)) {
+          R.remove(word); // ordet blev fjernet, mens optagelsen blev gemt
+        } else {
+          audio.recorded.add(word);
+          audio.buffers.delete('rec:' + word);
+          speak([word], true); // afspil med det samme, så forælderen kan høre, om den er god
+        }
       }
     } catch (e) {
       recordError('Optagelsen kunne ikke gemmes. Prøv igen.');
@@ -1146,6 +1206,7 @@
 
   twoTapButton($('#clear-words'), 'Tryk igen for at rydde listen', () => {
     stopRecording(true);
+    recordError('');
     forgetCustomStats(state.customWords.map((w) => w.word));
     forgetRecordings(state.customWords.map((w) => w.word));
     state.customWords = [];

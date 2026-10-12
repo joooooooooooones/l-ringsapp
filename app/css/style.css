@@ -855,13 +855,16 @@ body[data-area] {
 .chip-remove {
   display: grid;
   place-items: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
+  min-width: 44px;
+  height: 44px;
+  margin-left: var(--space-1);
+  border-radius: 22px;
   background: transparent;
   color: var(--words-dark);
-  font-size: 0.95rem;
+  font-size: 1.3rem;
+  font-weight: 700;
 }
+.chip-remove.armed { padding: 0 12px; background: var(--danger-ink); color: var(--on-color); font-size: var(--text-s); }
 .chip-remove:active { background: var(--card); }
 
 /* ---------- Tablet og store skærme ----------
