@@ -1242,6 +1242,7 @@
 
   const BACKUP_DATE_KEY = 'stav-og-regn-sidste-kopi';
   let pendingBackup = null; // indlæst fil, der venter på bekræftelse
+  let persistAsked = false;
 
   function lastBackupDate() {
     try { return localStorage.getItem(BACKUP_DATE_KEY) || ''; } catch (e) { return ''; }
@@ -1255,7 +1256,14 @@
     let persisted = false;
     try {
       // Beder browseren om ikke at rydde data, når enheden mangler plads (voksen er til stede her).
-      if (navigator.storage && navigator.storage.persist) persisted = (await navigator.storage.persisted()) || (await navigator.storage.persist());
+      // Kun én gang pr. åbning af appen, så Firefox ikke spørger igen og igen.
+      if (navigator.storage && navigator.storage.persist) {
+        persisted = await navigator.storage.persisted();
+        if (!persisted && !persistAsked) {
+          persistAsked = true;
+          persisted = await navigator.storage.persist();
+        }
+      }
     } catch (e) { /* ikke understøttet */ }
     $('#backup-status').textContent = [
       'Alt gemmes kun på denne enhed. Gem en kopi, før du skifter telefon eller rydder browseren – den kan gendannes på en ny enhed.',
@@ -1272,6 +1280,9 @@
   }
 
   $('#backup-save').addEventListener('click', async () => {
+    const btn = $('#backup-save');
+    if (btn.disabled) return;
+    btn.disabled = true; // et dobbelttryk må ikke give både del-menu og download
     backupMessage();
     try {
       const recs = await R.all();
@@ -1306,6 +1317,8 @@
       renderBackup();
     } catch (e) {
       backupMessage('', 'Sikkerhedskopien kunne ikke gemmes. Prøv igen.');
+    } finally {
+      btn.disabled = false;
     }
   });
 
@@ -1344,16 +1357,33 @@
     const r = pendingBackup;
     pendingBackup = null;
     stopRecording(true);
+    $('#backup-apply').disabled = true;
+    // Kun optagelser, der kan afspilles på denne enhed (en kopi kan komme fra en anden slags telefon).
+    const ctx = audioCtx();
+    const playable = [];
+    for (const rec of r.recordings) {
+      const data = rec.bytes.buffer.slice(rec.bytes.byteOffset, rec.bytes.byteOffset + rec.bytes.byteLength);
+      try {
+        if (ctx) await ctx.decodeAudioData(data.slice(0));
+        playable.push({ word: rec.word, type: rec.type, data });
+      } catch (e) { /* springes over */ }
+    }
+    // Optagelserne erstattes i én omgang (alt eller intet), før fremskridtet skiftes.
+    const ok = await R.replaceAll(playable);
+    $('#backup-apply').disabled = false;
+    if (!ok) {
+      backupMessage('', 'Sikkerhedskopien kunne ikke gendannes (lageret svarede ikke). Intet er ændret. Prøv igen.');
+      $('#backup-confirm').hidden = true;
+      return;
+    }
     state = r.state;
     save();
-    // Optagelserne erstattes også: de gamle slettes, kopiens lægges ind.
-    for (const w of await R.words()) await R.remove(w);
-    for (const rec of r.recordings) await R.put({ word: rec.word, type: rec.type, data: rec.bytes.buffer.slice(rec.bytes.byteOffset, rec.bytes.byteOffset + rec.bytes.byteLength) });
-    audio.recorded = new Set(r.recordings.map((rec) => rec.word));
+    audio.recorded = new Set(playable.map((rec) => rec.word));
     for (const k of Array.from(audio.buffers.keys())) if (k.startsWith('rec:')) audio.buffers.delete(k);
     $('#backup-confirm').hidden = true;
     renderParent();
-    backupMessage('✓ Sikkerhedskopien er gendannet.');
+    const skipped = r.recordings.length - playable.length;
+    backupMessage(`✓ Sikkerhedskopien er gendannet.${skipped ? ` ${skipped} optagelse${skipped === 1 ? '' : 'r'} kunne ikke afspilles på denne enhed – optag ${skipped === 1 ? 'den' : 'dem'} igen.` : ''}`);
   });
 
   document.querySelectorAll('[data-goal]').forEach((b) => b.addEventListener('click', () => {

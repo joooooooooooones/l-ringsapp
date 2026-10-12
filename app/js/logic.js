@@ -68,9 +68,11 @@
         if (v && typeof v === 'object') state.wordStats[w] = { seen: count(v.seen), misses: count(v.misses), okInRow: count(v.okInRow) };
       }
     }
-    state.customWords = Array.isArray(s.customWords)
-      ? s.customWords.filter((w) => w && parseCustomWord(String(w.word)).ok).map((w) => ({ word: w.word }))
-      : [];
+    state.customWords = [];
+    for (const w of Array.isArray(s.customWords) ? s.customWords : []) {
+      const r = w && typeof w.word === 'string' ? parseCustomWord(w.word) : { ok: false };
+      if (r.ok && state.customWords.length < CUSTOM_WORD_MAX && !state.customWords.some((x) => x.word === r.word)) state.customWords.push({ word: r.word });
+    }
     state.history = Array.isArray(s.history)
       ? s.history
         .filter((r) => r && typeof r.date === 'string' && DATE_RE.test(r.date) && typeof r.area === 'string')
@@ -353,7 +355,8 @@
     if (!b || typeof b !== 'object' || b.app !== BACKUP_APP || !b.state || typeof b.state !== 'object') {
       return { ok: false, error: 'Filen er ikke en sikkerhedskopi fra Stav og Regn.' };
     }
-    if (!(b.format <= BACKUP_FORMAT)) return { ok: false, error: 'Sikkerhedskopien er fra en nyere version af appen. Opdatér appen, og prøv igen.' };
+    if (!Number.isInteger(b.format) || b.format < 1) return { ok: false, error: 'Filen er ikke en sikkerhedskopi fra Stav og Regn.' };
+    if (b.format > BACKUP_FORMAT) return { ok: false, error: 'Sikkerhedskopien er fra en nyere version af appen. Opdatér appen, og prøv igen.' };
     const state = normalizeState(b.state, levelCounts);
     const words = new Set(state.customWords.map((w) => w.word));
     const recordings = [];

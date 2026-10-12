@@ -434,3 +434,16 @@ test('dagens mål: runder i dag tælles mod målet; standard er 2, 0 slår det f
   assert.deepEqual(L.dailyProgress(history, '2026-10-12', 2), { done: 2, goal: 2, reached: true });
   assert.deepEqual(L.dailyProgress(history, '2026-10-12', 0), { done: 2, goal: 0, reached: false }, 'slået fra');
 });
+
+test('gemt tilstand: ugens ord typekontrolleres – små bogstaver, ingen dubletter, højst 30', () => {
+  const many = Array.from({ length: 40 }, (_, i) => ({ word: 'ord' + 'abcdefghijklmnopqrstuvwxyzæøå'[i % 29] + 'abcdefghijklmnopqrstuvwxyzæøå'[Math.floor(i / 29)] }));
+  const s = L.normalizeState({ customWords: [{ word: ['kat'] }, { word: 'Hund' }, { word: 'hund' }, { word: 42 }, ...many] }, null);
+  assert.deepEqual(s.customWords.slice(0, 2), [{ word: 'hund' }, { word: 'ordaa' }]);
+  assert.equal(s.customWords.length, L.CUSTOM_WORD_MAX);
+});
+
+test('sikkerhedskopi: en fil uden formatnummer afvises som ugyldig, ikke som "nyere version"', () => {
+  const r = L.parseBackup(JSON.stringify({ app: 'stav-og-regn', state: {} }), null);
+  assert.equal(r.ok, false);
+  assert.match(r.error, /ikke en sikkerhedskopi/);
+});
