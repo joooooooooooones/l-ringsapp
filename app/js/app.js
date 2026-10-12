@@ -48,7 +48,17 @@
     buffers: new Map(),
     playing: [],
     token: 0,
+    recorded: new Set(), // ugens ord, som forælderen har optaget (se recordings.js)
   };
+
+  const R = window.RECORDINGS;
+  R.words().then((words) => {
+    // Optagelser til ord, der ikke længere er på listen, ryddes op.
+    const orphans = L.orphanRecordings(words, state.customWords);
+    orphans.forEach((w) => R.remove(w));
+    audio.recorded = new Set(words.filter((w) => !orphans.includes(w)));
+    if (!$('#screen-parent').hidden) renderCustomWords();
+  });
 
   fetch('audio/manifest.json')
     .then((r) => (r.ok ? r.json() : { clips: [] }))
@@ -85,6 +95,42 @@
     return audio.buffers.get(key);
   }
 
+  // Forælderens optagelse: afkodes, stilhed skæres fra, og stille optagelser forstærkes.
+  function loadRecording(word) {
+    const key = 'rec:' + word;
+    if (!audio.buffers.has(key)) {
+      const ctx = audioCtx();
+      audio.buffers.set(key, R.get(word)
+        .then((rec) => (rec ? ctx.decodeAudioData(rec.data.slice(0)) : null))
+        .then((buf) => (buf ? prepareRecording(ctx, buf) : null))
+        .catch(() => null));
+    }
+    return audio.buffers.get(key);
+  }
+
+  function prepareRecording(ctx, buf) {
+    const range = L.trimSilence(buf.getChannelData(0), buf.sampleRate);
+    if (!range) return null;
+    const out = ctx.createBuffer(buf.numberOfChannels, range.end - range.start, buf.sampleRate);
+    let peak = 0;
+    for (let c = 0; c < buf.numberOfChannels; c++) {
+      const part = buf.getChannelData(c).subarray(range.start, range.end);
+      for (let i = 0; i < part.length; i++) peak = Math.max(peak, Math.abs(part[i]));
+      out.copyToChannel(part, c);
+    }
+    const gain = L.recordingGain(peak);
+    if (gain !== 1) {
+      for (let c = 0; c < out.numberOfChannels; c++) {
+        const d = out.getChannelData(c);
+        for (let i = 0; i < d.length; i++) d[i] *= gain;
+      }
+    }
+    return out;
+  }
+
+  // Kan ordet læses op (indbygget lydklip eller forælderens optagelse)?
+  const hasVoice = (word) => audio.recorded.has(word) || audio.available.has(window.DATA.audioKey(word));
+
   function stopSpeech() {
     audio.token++;
     audio.playing.forEach((src) => { try { src.stop(); } catch (e) { /* allerede stoppet */ } });
@@ -107,12 +153,20 @@
   }
 
   // Læser en eller flere tekster op efter hinanden, f.eks. say('kat', 'Stav ordet.').
-  async function say(...texts) {
+  // Et optaget ord (ugens ord) læses med forælderens stemme.
+  const say = (...texts) => speak(texts, false);
+
+  // force: læs op, selv om lyden er slået fra (forælderen afprøver en optagelse).
+  async function speak(texts, force) {
     stopSpeech();
-    if (!state.settings.sound || !audioCtx()) return 0;
+    if ((!state.settings.sound && !force) || !audioCtx()) return 0;
     const my = audio.token;
-    const keys = texts.filter(Boolean).map(window.DATA.audioKey).filter((k) => audio.available.has(k));
-    const buffers = await Promise.all(keys.map(loadClip));
+    const loads = texts.filter(Boolean).map((t) => {
+      if (audio.recorded.has(t)) return loadRecording(t);
+      const k = window.DATA.audioKey(t);
+      return audio.available.has(k) ? loadClip(k) : null;
+    }).filter(Boolean);
+    const buffers = await Promise.all(loads);
     if (my !== audio.token) return 0;
     return playBuffers(buffers, true);
   }
@@ -158,6 +212,7 @@
       clearTaskTimers();
       stopSpeech();
     }
+    if (name !== 'parent') stopRecording(true);
     if (name === 'home') {
       renderHome();
       if (typeof reloadIfHome === 'function') setTimeout(reloadIfHome, 0);
@@ -492,7 +547,10 @@
     const look = el('div', 'look-card');
     const shown = el('div', 'look-word', t.letters.map(fmt).join(''));
     const ready = el('button', 'big-action words', 'Klar! 🙈');
-    look.append(el('p', 'look-title', 'Kig godt på ordet'), shown, ready);
+    const wordRow = el('div', 'look-word-row');
+    wordRow.append(shown);
+    if (hasVoice(w.word)) wordRow.append(speakerButton(w.word));
+    look.append(el('p', 'look-title', 'Kig godt på ordet'), wordRow, ready);
     root.append(look);
     say(P.lookAtWord, w.word);
     const myTask = task;
@@ -543,7 +601,10 @@
         });
       }, 1800);
     });
-    root.append(el('p', 'look-title', P.spellFromMemory), slots, tiles, peek);
+    const title = el('div', 'question-row');
+    title.append(el('p', 'look-title', P.spellFromMemory));
+    if (hasVoice(t.word)) title.append(speakerButton(t.word));
+    root.append(title, slots, tiles, peek);
     say(P.spellFromMemory);
     tiles.firstChild.focus();
   }
@@ -822,26 +883,152 @@
     else stats.prepend(el('p', 'note area-stat-head', 'Rigtige i første forsøg'));
   }
 
+  // Ugens ord som rækker: ordet, optag/hør med forælderens stemme, og fjern.
   function renderCustomWords() {
     const list = $('#custom-words');
+    const canRecord = recordingSupported();
     list.replaceChildren(...state.customWords.map(({ word }) => {
-      const c = el('span', 'chip words-chip' + (freshWords.has(word) ? ' fresh' : ''));
+      const row = el('div', 'word-row' + (freshWords.has(word) ? ' fresh' : ''));
+      const recording = recorder && recorder.word === word;
+      const has = audio.recorded.has(word);
+      const name = el('span', 'word-row-name');
+      name.append(el('strong', null, word), el('span', 'word-row-status', recording ? '● Sig ordet nu …' : has ? '✓ Din stemme' : hasVoice(word) ? 'Indbygget lyd' : 'Ingen lyd endnu'));
+      row.append(name);
+      if (has && !recording) {
+        const play = el('button', 'small-btn', '▶ Hør');
+        play.type = 'button';
+        play.setAttribute('aria-label', `Hør ${word}`);
+        play.addEventListener('click', () => speak([word], true));
+        row.append(play);
+      }
+      if (canRecord) {
+        const rec = el('button', 'small-btn ' + (recording ? 'rec-stop' : has ? '' : 'rec'), recording ? '■ Stop' : has ? '🎤 Igen' : '🎤 Optag');
+        rec.type = 'button';
+        rec.setAttribute('aria-label', recording ? 'Stop optagelsen' : `Optag ${word} med din stemme`);
+        rec.addEventListener('click', () => (recording ? stopRecording() : recordWord(word)));
+        row.append(rec);
+      }
       const remove = el('button', 'chip-remove', '×');
+      remove.type = 'button';
       remove.setAttribute('aria-label', `Fjern ${word}`);
       remove.addEventListener('click', () => {
+        if (recorder && recorder.word === word) stopRecording(true);
         L.removeCustomWord(state, word);
         forgetCustomStats([word]);
+        forgetRecordings([word]);
         save();
         renderCustomWords();
       });
-      c.append(el('strong', null, word), remove);
-      return c;
+      row.append(remove);
+      return row;
     }));
     const n = state.customWords.length;
-    $('#words-note').textContent = n
-      ? `${n} ord. De øves under "Ugens ord" på forsiden: ordet vises, skjules og staves med brikker. Egne ord bliver ikke læst op, så læs gerne ordet højt sammen med barnet.`
-      : 'Skriv ugens ord fra skolen, så kan de øves under "Ugens ord" på forsiden.';
+    const missing = state.customWords.filter((w) => !hasVoice(w.word)).length;
+    $('#words-note').textContent = !n
+      ? 'Skriv ugens ord fra skolen, så kan de øves under "Ugens ord" på forsiden.'
+      : !canRecord
+        ? `${n} ord. De øves under "Ugens ord" på forsiden. Denne browser kan ikke optage lyd, så læs gerne ordene højt sammen med barnet.`
+        : missing
+          ? `${n} ord. Tryk 🎤 Optag og sig ordet tydeligt, så bliver det læst op med din stemme, og barnet kan øve alene. ${missing} mangler lyd.`
+          : `${n} ord, alle med lyd. De øves under "Ugens ord" på forsiden: ordet læses op, vises, skjules og staves med brikker.`;
     $('#clear-words').hidden = n === 0;
+  }
+
+  // ---------- Optag ugens ord med forælderens stemme ----------
+
+  const RECORD_MAX_MS = 3000; // et enkelt ord tager under 3 sekunder
+  let recorder = null; // { word, mr, stream, timer, cancelled }
+
+  const recordingSupported = () => !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder);
+
+  function recordError(msg) {
+    const err = $('#record-error');
+    err.textContent = msg;
+    err.hidden = !msg;
+  }
+
+  function micErrorText(e) {
+    const name = e && e.name;
+    if (name === 'NotAllowedError' || name === 'SecurityError') return 'Mikrofonen er blokeret. Tillad mikrofon for siden i browserens indstillinger (låse-ikonet ved adressen), og prøv igen.';
+    if (name === 'NotFoundError' || name === 'OverconstrainedError') return 'Der blev ikke fundet en mikrofon på enheden.';
+    if (name === 'NotReadableError') return 'Mikrofonen bruges af en anden app. Luk den, og prøv igen.';
+    return 'Optagelsen kunne ikke starte. Prøv igen.';
+  }
+
+  async function recordWord(word) {
+    if (recorder) stopRecording(true);
+    stopSpeech();
+    recordError('');
+    audioCtx(); // lydsystemet skal startes i selve trykket (iPad/iPhone)
+    let stream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
+    } catch (e) {
+      recordError(micErrorText(e));
+      return;
+    }
+    const type = L.pickRecordingType((t) => MediaRecorder.isTypeSupported(t));
+    let mr;
+    try {
+      mr = type ? new MediaRecorder(stream, { mimeType: type }) : new MediaRecorder(stream);
+    } catch (e) {
+      stream.getTracks().forEach((t) => t.stop());
+      recordError('Optagelsen kunne ikke starte. Prøv igen.');
+      return;
+    }
+    const chunks = [];
+    const me = { word, mr, stream, timer: null, cancelled: false };
+    recorder = me;
+    mr.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
+    mr.onstop = () => {
+      stream.getTracks().forEach((t) => t.stop());
+      clearTimeout(me.timer);
+      if (recorder === me) recorder = null;
+      if (me.cancelled) {
+        if (!$('#screen-parent').hidden) renderCustomWords();
+        return;
+      }
+      saveRecording(word, new Blob(chunks, { type: mr.mimeType || type || 'audio/webm' }));
+    };
+    mr.start();
+    me.timer = setTimeout(() => stopRecording(), RECORD_MAX_MS);
+    renderCustomWords();
+  }
+
+  // cancel: afbryd uden at gemme (f.eks. når voksensiden forlades midt i en optagelse).
+  function stopRecording(cancel) {
+    if (!recorder) return;
+    recorder.cancelled = !!cancel;
+    clearTimeout(recorder.timer);
+    if (recorder.mr.state !== 'inactive') recorder.mr.stop();
+  }
+
+  async function saveRecording(word, blob) {
+    try {
+      const data = await blob.arrayBuffer();
+      const ctx = audioCtx();
+      const buf = ctx ? await ctx.decodeAudioData(data.slice(0)) : null;
+      if (!buf || !L.trimSilence(buf.getChannelData(0), buf.sampleRate)) {
+        recordError(`Der kom ingen lyd med på "${word}". Hold telefonen tæt på munden, og prøv igen.`);
+      } else if (state.customWords.some((w) => w.word === word)) {
+        await R.put({ word, type: blob.type, data });
+        audio.recorded.add(word);
+        audio.buffers.delete('rec:' + word);
+        speak([word], true); // afspil med det samme, så forælderen kan høre, om den er god
+      }
+    } catch (e) {
+      recordError('Optagelsen kunne ikke gemmes. Prøv igen.');
+    }
+    if (!$('#screen-parent').hidden) renderCustomWords();
+  }
+
+  function forgetRecordings(words) {
+    for (const w of words) {
+      if (!audio.recorded.has(w)) continue;
+      audio.recorded.delete(w);
+      audio.buffers.delete('rec:' + w);
+      R.remove(w);
+    }
   }
 
   $('#word-form').addEventListener('submit', (e) => {
@@ -898,7 +1085,9 @@
   }
 
   twoTapButton($('#clear-words'), 'Tryk igen for at rydde listen', () => {
+    stopRecording(true);
     forgetCustomStats(state.customWords.map((w) => w.word));
+    forgetRecordings(state.customWords.map((w) => w.word));
     state.customWords = [];
     save();
     renderCustomWords();

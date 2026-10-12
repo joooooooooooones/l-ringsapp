@@ -62,6 +62,7 @@
   --counted: #fff1b8;
   --danger-soft: #ffe3e3;
   --danger-ink: #b42318;
+  --danger-dark: #7a1710;
   --focus: #1f3f99;
   --focus-ring: rgba(47, 91, 211, 0.45);
   --focus-ring-soft: rgba(47, 91, 211, 0.3);
@@ -781,8 +782,25 @@ body[data-area] {
 .word-form input[aria-invalid="true"] { border-color: var(--danger-ink); }
 .small-btn.primary { background: var(--words); color: var(--on-color); box-shadow: 0 3px 0 var(--words-dark); }
 .form-error { margin: 0; color: var(--danger-ink); font-weight: 700; font-size: var(--text-s); }
-.words-chip { background: var(--words-soft); align-items: center; padding-right: 4px; }
-.words-chip.fresh { box-shadow: 0 0 0 2px var(--words); animation: pop 0.35s; }
+/* Ugens ord: én række pr. ord med optag/hør og fjern */
+.word-list { display: grid; gap: var(--space-2); }
+.word-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-1) var(--space-1) var(--space-3);
+  border-radius: var(--radius-s);
+  background: var(--words-soft);
+}
+.word-row.fresh { box-shadow: inset 0 0 0 2px var(--words); animation: pop 0.35s; }
+.word-row-name { flex: 1; min-width: 0; display: grid; }
+.word-row-name strong { font-size: var(--text-m); overflow-wrap: anywhere; }
+.word-row-status { font-size: 0.8rem; color: var(--words-dark); }
+.word-row .small-btn { min-height: 40px; padding: 6px 12px; white-space: nowrap; }
+.small-btn.rec { background: var(--words); color: var(--on-color); box-shadow: 0 3px 0 var(--words-dark); }
+.small-btn.rec-stop { background: var(--danger-ink); color: var(--on-color); box-shadow: 0 3px 0 var(--danger-dark); animation: rec-pulse 1s ease-in-out infinite alternate; }
+@keyframes rec-pulse { from { box-shadow: 0 0 0 0 var(--danger-soft); } to { box-shadow: 0 0 0 6px var(--danger-soft); } }
+.look-word-row { display: flex; align-items: center; justify-content: center; gap: var(--space-3); max-width: 100%; }
 .chip-remove {
   display: grid;
   place-items: center;
@@ -873,6 +891,6 @@ body[data-area] {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .confetti, .shake, .pop, .tile.hint { animation-duration: 0.01s; }
+  .confetti, .shake, .pop, .tile.hint, .small-btn.rec-stop { animation-duration: 0.01s; }
   .area-card, .parent-btn { transition: none; }
 }
