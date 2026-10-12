@@ -100,8 +100,10 @@
         <span class="top-spacer"></span>
       </header>
       <div class="parent-body">
+        <div class="kpis" id="kpis"></div>
+        <div class="parent-cols">
         <section class="panel">
-          <h3>Ugens ord</h3>
+          <h3><span aria-hidden="true">📝</span> Ugens ord</h3>
           <form class="word-form" id="word-form" autocomplete="off">
             <input id="word-input" type="text" maxlength="400" placeholder="Fx: hund, kat, mor" aria-label="Nye ord – gerne flere på én gang" aria-describedby="word-help" autocapitalize="none" spellcheck="false" enterkeyhint="done">
             <button class="small-btn primary" type="submit">Tilføj</button>
@@ -115,20 +117,20 @@
         </section>
 
         <section class="panel">
-          <h3>Den sidste uge</h3>
+          <h3><span aria-hidden="true">📊</span> Den sidste uge</h3>
           <div class="week" id="week"></div>
           <div class="area-stats" id="area-stats"></div>
           <p class="note" id="stats"></p>
         </section>
 
         <section class="panel">
-          <h3>Svære ord</h3>
+          <h3><span aria-hidden="true">🔁</span> Svære ord</h3>
           <div class="chips" id="hard-words"></div>
           <p class="note">Ord med fejl kommer oftere igen, indtil de er stavet rigtigt to gange i træk.</p>
         </section>
 
         <section class="panel">
-          <h3>Niveau</h3>
+          <h3><span aria-hidden="true">🎚️</span> Niveau og dagens mål</h3>
           <div class="field">
             <span>Stave</span>
             <div class="stepper">
@@ -165,7 +167,7 @@
         </section>
 
         <section class="panel">
-          <h3>Indstillinger</h3>
+          <h3><span aria-hidden="true">⚙️</span> Indstillinger</h3>
           <div class="field">
             <span>App på startskærmen</span>
             <p class="note" id="install-status"></p>
@@ -190,7 +192,7 @@
         </section>
 
         <section class="panel" id="backup-panel">
-          <h3>Sikkerhedskopi</h3>
+          <h3><span aria-hidden="true">💾</span> Sikkerhedskopi</h3>
           <p class="note" id="backup-status"></p>
           <div class="btn-row">
             <button class="small-btn primary" id="backup-save" type="button">💾 Gem sikkerhedskopi</button>
@@ -208,6 +210,7 @@
           </div>
           <p class="ok-text" id="backup-ok" role="status" hidden></p>
         </section>
+        </div>
 
         <button class="small-btn danger" id="reset" type="button">Nulstil alt undtagen ugens ord og indstillinger</button>
       </div>

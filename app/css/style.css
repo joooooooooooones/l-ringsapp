@@ -708,8 +708,30 @@ body[data-area] {
   border-radius: 12px;
   background: var(--card);
   font-weight: 700;
-  box-shadow: 0 3px 0 var(--shadow-color);
+  box-shadow: inset 0 0 0 2px var(--line-soft), 0 3px 0 var(--shadow-color);
 }
+.small-btn:active { transform: translateY(2px); }
+
+/* Nøgletal øverst på voksensiden */
+.kpis { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); }
+.kpi {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: auto auto;
+  column-gap: var(--space-3);
+  align-items: center;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius);
+  background: var(--card);
+  box-shadow: var(--shadow);
+}
+.kpi-icon { grid-row: 1 / 3; font-size: 1.8rem; line-height: 1; }
+.kpi-value { font-size: var(--text-l); font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.kpi-label { font-size: 0.85rem; color: var(--muted); line-height: 1.2; }
+.kpi.good { background: var(--good-soft-strong); box-shadow: 0 5px 0 var(--good); }
+.kpi.good .kpi-label { color: var(--good-dark); }
+.parent-cols { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-4); }
+.panel h3 span { margin-right: 4px; }
 .small-btn.danger { background: var(--danger-soft); color: var(--danger-ink); }
 .small-btn.danger-solid { background: var(--danger-ink); color: var(--on-color); box-shadow: 0 3px 0 var(--danger-dark); }
 .btn-row { display: flex; flex-wrap: wrap; gap: var(--space-2); }
@@ -896,7 +918,12 @@ body[data-area] {
   .choice.choice-emoji { font-size: 3.8rem; }
   .feedback { font-size: 2.3rem; }
   .round-goal { font-size: 2rem; }
-  .parent-body { max-width: 640px; margin: 0 auto; width: 100%; }
+  .parent-body { max-width: 1000px; margin: 0 auto; width: 100%; }
+  .kpis { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  /* To kolonner, hvor panelerne fordeles efter højde (læses oppefra og ned) */
+  .parent-cols { display: block; columns: 2; column-gap: var(--space-4); }
+  .parent-cols > .panel { break-inside: avoid; margin-bottom: var(--space-4); }
+  #reset { justify-self: center; padding: 10px 28px; }
   .album-btn { font-size: 1.8rem; padding: 10px 22px; }
   .look-card { width: min(100%, 720px); }
   .look-word { font-size: 7rem; }

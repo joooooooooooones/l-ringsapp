@@ -860,6 +860,7 @@
     $('#goal-set').textContent = g ? `${g} ${g === 1 ? 'runde' : 'runder'} om dagen` : 'Slået fra';
     renderWeek();
     renderCustomWords();
+    renderKpis();
     $('#stats').textContent =
       `I alt: ${state.stars} stjerner · ${state.spell.done} staveopgaver · ${state.math.done} regneopgaver · ${state.pattern.done} mønstre · ${state.stickers.length} klistermærker`;
     // Kun ord der kan komme lige nu (stave-niveauets ordliste + ugens ord), så listen passer med teksten.
@@ -877,6 +878,28 @@
     if (!hard.length) chips.append(el('p', 'note', 'Ingen svære ord lige nu. 🎉'));
     $('#voice-status').textContent = `${audio.available.size} lydklip installeret.`;
     renderBackup();
+  }
+
+  // Nøgletal øverst på voksensiden: det man oftest vil vide, uden at scrolle.
+  function renderKpis() {
+    const today = todayProgress();
+    const week = L.weekSummary(state.history, new Date());
+    const rounds = week.days.reduce((n, d) => n + d.rounds, 0);
+    const areas = Object.values(week.areas);
+    const tasks = areas.reduce((n, a) => n + a.tasks, 0);
+    const first = areas.reduce((n, a) => n + a.firstTry, 0);
+    const tiles = [
+      ['🏆', 'Runder i dag', today.goal ? `${today.done} af ${today.goal}` : String(today.done), today.reached ? 'good' : ''],
+      ['📅', 'Runder i ugen', String(rounds), ''],
+      ['🎯', 'Rigtige i første forsøg', tasks ? `${Math.round((first / tasks) * 100)} %` : '–', ''],
+      ['📒', 'Klistermærker', `${state.stickers.length} af ${STICKERS.length}`, ''],
+    ];
+    $('#kpis').replaceChildren(...tiles.map(([icon, label, value, mod]) => {
+      const t = el('div', 'kpi' + (mod ? ' ' + mod : ''));
+      t.append(el('span', 'kpi-icon', icon), el('span', 'kpi-value', value), el('span', 'kpi-label', label));
+      t.querySelector('.kpi-icon').setAttribute('aria-hidden', 'true');
+      return t;
+    }));
   }
 
   const AREA_NAMES = { spell: 'Stave', math: 'Regne', pattern: 'Mønstre', words: 'Ugens ord' };
