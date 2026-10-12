@@ -660,7 +660,7 @@ body[data-area] {
 
 /* ---------- Voksen-side ---------- */
 
-.parent-body { display: grid; gap: var(--space-4); padding: var(--space-3) 0 var(--space-5); user-select: text; }
+.parent-body { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-4); padding: var(--space-3) 0 var(--space-5); user-select: text; }
 .field { display: grid; gap: var(--space-2); font-weight: 700; }
 .field.row { grid-template-columns: 1fr auto; align-items: center; }
 .field input[type="text"] {
@@ -723,9 +723,10 @@ body[data-area] {
   border-radius: var(--radius);
   box-shadow: var(--shadow);
 }
+.panel > * { min-width: 0; }
 .panel h3 { margin: 0; font-size: var(--text-m); }
 
-.week { display: grid; grid-template-columns: repeat(7, 1fr); gap: var(--space-2); height: 130px; }
+.week { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: var(--space-2); height: 130px; }
 .week-day { display: grid; grid-template-rows: 18px 1fr 20px; justify-items: center; gap: 2px; min-width: 0; }
 .week-count { font-size: 0.85rem; font-weight: 700; font-variant-numeric: tabular-nums; }
 .week-track { width: 100%; max-width: 34px; display: flex; align-items: flex-end; background: var(--bg); border-radius: 8px; overflow: hidden; }
