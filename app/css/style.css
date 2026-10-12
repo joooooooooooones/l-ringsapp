@@ -130,7 +130,7 @@ body[data-area="pattern"] { --area: var(--pattern); --area-dark: var(--pattern-d
 body[data-area="words"] { --area: var(--words); --area-dark: var(--words-dark); --area-soft: var(--words-soft); --area-current: var(--words); }
 body[data-area] {
   background-image:
-    linear-gradient(to bottom, var(--area-soft), rgba(255, 255, 255, 0) 220px),
+    linear-gradient(to bottom, var(--area) 0 6px, var(--area-soft) 6px, rgba(255, 255, 255, 0) 150px),
     radial-gradient(var(--bg-dot) 1.5px, transparent 1.6px);
   background-size: 100% 100%, 22px 22px;
   background-repeat: no-repeat, repeat;
@@ -184,9 +184,9 @@ body[data-area] {
 
 /* Fremdrift i runden: ét felt pr. opgave og pokalen for enden */
 .round-bar { display: flex; align-items: center; gap: 4px; flex: 1; max-width: 400px; }
-.seg { flex: 1; height: 14px; border-radius: 7px; background: var(--card); box-shadow: inset 0 0 0 2px var(--line-soft); transition: background 0.3s; }
+.seg { flex: 1; height: 14px; border-radius: 7px; background: var(--card); box-shadow: inset 0 0 0 2px var(--line); transition: background 0.3s; }
 .seg.on { background: var(--area); box-shadow: none; }
-.seg.now { background: color-mix(in srgb, var(--area) 30%, var(--card)); box-shadow: none; }
+.seg.now { background: var(--card); box-shadow: inset 0 0 0 3px var(--area); } /* her er du nu */
 .round-goal { flex: none; margin-left: 4px; font-size: 1.6rem; line-height: 1; filter: grayscale(1); opacity: 0.45; transition: filter 0.3s, opacity 0.3s; }
 .round-goal.on { filter: none; opacity: 1; animation: pop 0.4s; }
 
@@ -199,6 +199,7 @@ body[data-area] {
   gap: var(--space-3);
   padding: var(--space-3) 0 var(--space-5);
 }
+.home-top > div:first-child { min-width: 0; }
 #greeting {
   margin: 0;
   font-size: var(--text-xl);
@@ -267,29 +268,30 @@ body[data-area] {
 }
 .parent-hint { text-align: center; color: var(--muted); margin: var(--space-2) 0 0; }
 
-/* Dagens mål: en pokal pr. runde */
+/* Dagens mål: en pokal pr. runde. Fladt mærke (ingen knap-skygge), for det kan ikke trykkes på. */
 .goal {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
+  gap: var(--space-2) var(--space-3);
   width: fit-content;
   max-width: 100%;
-  margin: calc(var(--space-2) * -1) 0 var(--space-4);
-  padding: var(--space-2) var(--space-4);
+  margin: var(--space-3) 0 0;
+  padding: 6px var(--space-4);
   border-radius: 999px;
   background: var(--card);
-  box-shadow: var(--shadow);
+  border: 2px solid var(--line-soft);
   font-weight: 700;
+  white-space: nowrap;
 }
 .goal-label { color: var(--muted); font-size: var(--text-s); }
 .goal-cups { display: flex; gap: var(--space-1); font-size: 1.6rem; line-height: 1; }
 .goal-cup { filter: grayscale(1); opacity: 0.35; }
 .goal-cup.on { filter: none; opacity: 1; }
 .goal-text { font-variant-numeric: tabular-nums; }
-.goal.reached { background: var(--good-soft-strong); box-shadow: 0 5px 0 var(--good); }
+.goal.reached { background: var(--good-soft-strong); border-color: var(--good); }
 .goal.reached .goal-label, .goal.reached .goal-text { color: var(--good-dark); }
-.goal-round { margin: var(--space-2) 0 0; box-shadow: none; background: var(--bg); }
-.goal-round.reached { box-shadow: none; }
+.goal.goal-round { margin: var(--space-1) 0 0; background: var(--bg); }
+.goal.goal-round.reached { background: var(--good-soft-strong); }
 
 /* ---------- Opgaver ---------- */
 
@@ -387,6 +389,13 @@ body[data-area] {
 }
 .op { font-size: 2.4rem; font-weight: 700; color: var(--math); }
 @media (max-width: 520px) {
+  /* Telefon: pokalerne siger det selv; teksten "Dagens mål" står i skærmlæserens etiket */
+  .goal .goal-label { display: none; }
+  .goal { padding: 4px var(--space-3); }
+  .round-end { gap: var(--space-2); padding: var(--space-5) var(--space-4); }
+  .round-trophy { font-size: 3.6rem; }
+  .round-stars { font-size: 1.6rem; }
+  .sticker-big { font-size: 3.4rem; }
   /* Telefon: fremdriften får sin egen række i fuld bredde under Hjem og stjerner */
   #screen-play .top { flex-wrap: wrap; row-gap: var(--space-2); }
   #screen-play .round-bar { order: 3; flex-basis: 100%; max-width: none; }
@@ -672,7 +681,8 @@ body[data-area] {
 
 /* ---------- Fejring ---------- */
 
-.celebrate { position: fixed; inset: 0; pointer-events: none; overflow: hidden; }
+.celebrate { position: fixed; inset: 0; z-index: 1; pointer-events: none; overflow: hidden; }
+.feedback, .round-end { position: relative; z-index: 2; }
 .confetti {
   position: absolute;
   bottom: -60px;
@@ -700,7 +710,7 @@ body[data-area] {
 .field input[type="checkbox"] { width: 28px; height: 28px; accent-color: var(--math); }
 .note { margin: 0; font-weight: 400; color: var(--muted); font-size: var(--text-s); }
 .stepper { display: flex; align-items: center; gap: var(--space-3); font-weight: 400; }
-.stepper span { flex: 1; text-align: center; }
+.stepper span { flex: 1; text-align: center; font-size: var(--text-s); text-wrap: balance; }
 .small-btn {
   padding: 10px 16px;
   min-width: 48px;
@@ -725,7 +735,8 @@ body[data-area] {
   background: var(--card);
   box-shadow: var(--shadow);
 }
-.kpi-icon { grid-row: 1 / 3; font-size: 1.8rem; line-height: 1; }
+.kpi { align-items: start; }
+.kpi-icon { grid-row: 1 / 3; align-self: center; font-size: 1.8rem; line-height: 1; }
 .kpi-value { font-size: var(--text-l); font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; }
 .kpi-label { font-size: 0.85rem; color: var(--muted); line-height: 1.2; }
 .kpi.good { background: var(--good-soft-strong); box-shadow: 0 5px 0 var(--good); }
@@ -835,6 +846,7 @@ body[data-area] {
 .form-error { margin: 0; color: var(--danger-ink); font-weight: 700; font-size: var(--text-s); }
 /* Ugens ord: én række pr. ord med optag/hør og fjern */
 .word-list { display: grid; gap: var(--space-2); }
+.word-list:empty { display: none; }
 .word-row {
   display: flex;
   align-items: center;
@@ -843,7 +855,8 @@ body[data-area] {
   border-radius: var(--radius-s);
   background: var(--words-soft);
 }
-.word-row.fresh { box-shadow: inset 0 0 0 2px var(--words); animation: pop 0.35s; }
+.word-row.fresh { box-shadow: inset 0 0 0 2px var(--words); animation: pop-soft 0.3s; }
+@keyframes pop-soft { from { transform: scale(0.97); opacity: 0.6; } to { transform: scale(1); opacity: 1; } }
 .word-row-name { flex: 1; min-width: 0; display: grid; }
 .word-row-name strong { font-size: var(--text-m); overflow-wrap: anywhere; }
 .word-row-status { font-size: 0.8rem; color: var(--words-dark); }
@@ -873,8 +886,9 @@ body[data-area] {
 @media (min-width: 760px) and (min-height: 560px) {
   #app { max-width: 1100px; padding-left: var(--space-6); padding-right: var(--space-6); }
   .home-top { padding: var(--space-5) 0 var(--space-6); }
-  .goal { margin: calc(var(--space-4) * -1) 0 var(--space-5); padding: var(--space-3) var(--space-5); font-size: var(--text-m); }
+  .goal { padding: var(--space-2) var(--space-5); font-size: var(--text-m); }
   .goal-cups { font-size: 2rem; }
+  .goal.goal-round { margin: var(--space-1) 0 0; }
   #greeting { font-size: 3.4rem; }
   .home-sub { font-size: var(--text-l); }
   .stars-pill { font-size: 1.8rem; padding: 10px 22px; }

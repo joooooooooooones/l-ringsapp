@@ -18,6 +18,11 @@
         <div>
           <h1 id="greeting">Hej!</h1>
           <p class="home-sub">Hvad vil du øve?</p>
+          <div class="goal" id="goal" role="img" hidden>
+            <span class="goal-label">Dagens mål</span>
+            <span class="goal-cups" id="goal-cups" aria-hidden="true"></span>
+            <span class="goal-text" id="goal-text"></span>
+          </div>
         </div>
         <div class="home-badges">
           <div class="stars-pill" aria-label="Stjerner">⭐ <span data-stars>0</span></div>
@@ -28,11 +33,6 @@
           </button>
         </div>
       </header>
-      <div class="goal" id="goal" role="img" hidden>
-        <span class="goal-label">Dagens mål</span>
-        <span class="goal-cups" id="goal-cups" aria-hidden="true"></span>
-        <span class="goal-text" id="goal-text"></span>
-      </div>
       <div class="area-grid">
         <button class="area-card spell" id="go-spell">
           <span class="area-icon" aria-hidden="true">🔤</span>

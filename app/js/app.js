@@ -904,7 +904,7 @@
     const first = areas.reduce((n, a) => n + a.firstTry, 0);
     const tiles = [
       ['🏆', 'Runder i dag', today.goal ? `${today.done} af ${today.goal}` : String(today.done), today.reached ? 'good' : ''],
-      ['📅', 'Runder i ugen', String(rounds), ''],
+      ['📊', 'Runder i ugen', String(rounds), ''],
       ['🎯', 'Rigtige i første forsøg', tasks ? `${Math.round((first / tasks) * 100)} %` : '–', ''],
       ['📒', 'Klistermærker', `${state.stickers.length} af ${STICKERS.length}`, ''],
     ];
