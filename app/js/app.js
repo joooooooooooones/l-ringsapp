@@ -152,6 +152,8 @@
 
   function show(name) {
     document.querySelectorAll('.screen').forEach((s) => { s.hidden = s.id !== 'screen-' + name; });
+    if (name === 'play' && area) document.body.dataset.area = area;
+    else delete document.body.dataset.area;
     if (name !== 'play') {
       clearTaskTimers();
       stopSpeech();
@@ -240,7 +242,11 @@
   // Fremdriftslinje øverst: ét felt pr. opgave i runden.
   function renderRound() {
     const bar = $('#round');
-    bar.replaceChildren(...Array.from({ length: L.ROUND_LENGTH }, (_, i) => el('span', i < round.done ? 'seg on' : 'seg')));
+    const done = round.done >= L.ROUND_LENGTH;
+    bar.replaceChildren(
+      ...Array.from({ length: L.ROUND_LENGTH }, (_, i) => el('span', i < round.done ? 'seg on' : i === round.done ? 'seg now' : 'seg')),
+      el('span', done ? 'round-goal on' : 'round-goal', '🏆'),
+    );
     bar.setAttribute('aria-label', `Opgave ${Math.min(round.done + 1, L.ROUND_LENGTH)} af ${L.ROUND_LENGTH}`);
   }
 
@@ -265,7 +271,7 @@
     let msg, praise;
     if (change > 0) {
       praise = P.newLevel;
-      msg = 'Nyt niveau! 🎉';
+      msg = 'Nyt niveau!';
       sfx('level');
       celebrate(30);
     } else {
@@ -275,7 +281,7 @@
       sfx('good');
       celebrate(12);
     }
-    $('#feedback').textContent = msg;
+    showFeedback(msg, change > 0);
     // Vent til oplæsningen er færdig, før næste opgave kommer.
     const minWait = change > 0 ? 2800 : 1900;
     say(...spoken, praise).then((secs) => {
@@ -333,6 +339,13 @@
     celebrate(40);
     say(P.roundDone, ...(won.length ? [P.newSticker, ...won.map((st) => st.name)] : []));
     again.focus();
+  }
+
+  // Ros som et banner med flueben under opgaven.
+  function showFeedback(msg, level) {
+    const pill = el('span', level ? 'feedback-pill level' : 'feedback-pill');
+    pill.append(el('span', 'feedback-check', level ? '★' : '✓'), el('span', null, msg));
+    $('#feedback').replaceChildren(pill);
   }
 
   function wrong(btn) {
