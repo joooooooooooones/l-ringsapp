@@ -316,3 +316,152 @@ test('installation: vejledning passer til browseren', () => {
   assert.equal(g(undefined), 'computer');
   for (const ua of ['SamsungBrowser Android', 'Android Chrome', 'iPad', 'Firefox', 'Windows']) assert.ok(L.installGuide(ua).steps.length >= 2);
 });
+
+test('gemt tilstand: forkerte typer (f.eks. fra en importeret fil) bliver til gyldige tal og tekster', () => {
+  const counts = { spell: 4, math: 7, pattern: 6 };
+  const s = L.normalizeState({
+    stars: 'mange',
+    settings: { uppercase: 'ja', sound: 0, name: 42 },
+    spell: { level: 'tre', streak: -2, misses: null, done: 7.6 },
+    math: { level: 2.7 },
+    history: [{ date: '2026-10-11', area: 'spell', total: '10', firstTry: 'x' }, { date: '11/10', area: 'spell', total: 10, firstTry: 5 }],
+  }, counts);
+  assert.equal(s.stars, 0);
+  assert.equal(s.settings.uppercase, true, 'ugyldig værdi giver standard');
+  assert.equal(s.settings.sound, true);
+  assert.equal(s.settings.name, '');
+  assert.deepEqual(s.spell, { level: 1, streak: 0, misses: 0, done: 7 });
+  assert.equal(s.math.level, 2);
+  assert.deepEqual(s.history, [{ date: '2026-10-11', area: 'spell', total: 10, firstTry: 0 }]);
+  // Gyldige data er uændrede.
+  const ok = L.normalizeState({ stars: 5, settings: { uppercase: false, sound: false, name: 'Ida' } }, counts);
+  assert.deepEqual([ok.stars, ok.settings.uppercase, ok.settings.sound, ok.settings.name], [5, false, false, 'Ida']);
+});
+
+test('ugens ord: en hel liste kan tilføjes på én gang; de ugyldige kommer tilbage med forklaring', () => {
+  const state = L.normalizeState({ customWords: [{ word: 'mor' }] }, null);
+  const r = L.addCustomWords(state, 'Hund, kat;  far\nmor sk0le hund');
+  assert.deepEqual(r.added, ['hund', 'kat', 'far']);
+  assert.deepEqual(r.rejected.map((x) => x.text), ['mor', 'sk0le', 'hund']);
+  assert.match(r.rejected[0].error, /allerede/);
+  assert.match(r.rejected[1].error, /bogstaver/);
+  assert.deepEqual(state.customWords.map((w) => w.word), ['mor', 'hund', 'kat', 'far']);
+  assert.match(L.addCustomWords(state, '  ,  ').rejected[0].error, /Skriv/);
+  // Ét ord virker som før.
+  assert.deepEqual(L.addCustomWords(state, 'bror').added, ['bror']);
+});
+
+test('optagelse: vælger det første lydformat browseren kan optage, ellers browserens standard', () => {
+  assert.equal(L.pickRecordingType((t) => t === 'audio/mp4'), 'audio/mp4');
+  assert.equal(L.pickRecordingType((t) => t.startsWith('audio/webm')), 'audio/webm;codecs=opus');
+  assert.equal(L.pickRecordingType(() => false), '');
+});
+
+test('optagelse: stilhed før og efter ordet skæres fra, og en tavs optagelse afvises', () => {
+  const rate = 100; // 100 samples pr. sekund gør regnestykket nemt
+  const samples = new Float32Array(300); // 3 sekunder
+  for (let i = 120; i < 180; i++) samples[i] = i % 2 ? 0.5 : -0.5; // ordet: 1,2-1,8 s
+  // Med 0,1 s luft på hver side: 1,1 s til 1,9 s.
+  assert.deepEqual(L.trimSilence(samples, rate, { pad: 0.1 }), { start: 110, end: 190 });
+  // Luften går ikke ud over kanten.
+  const edge = new Float32Array(50); edge[0] = 0.9; edge[49] = 0.9;
+  assert.deepEqual(L.trimSilence(edge, rate, { pad: 0.1 }), { start: 0, end: 50 });
+  assert.equal(L.trimSilence(new Float32Array(300).fill(0.005), rate), null, 'kun svag støj = tavs');
+});
+
+test('optagelse: optagelser til ord, der ikke længere er på listen, findes til oprydning', () => {
+  assert.deepEqual(L.orphanRecordings(['hund', 'kat', 'mor'], [{ word: 'kat' }]), ['hund', 'mor']);
+  assert.deepEqual(L.orphanRecordings([], [{ word: 'kat' }]), []);
+});
+
+test('optagelse: stille optagelser forstærkes op til 0,9 i top, men højst 4 gange', () => {
+  assert.equal(L.recordingGain(0.9), 1);
+  assert.equal(L.recordingGain(0.45), 2);
+  assert.equal(L.recordingGain(0.1), 4, 'loft, så støj ikke pustes op');
+  assert.equal(L.recordingGain(1), 1, 'høje optagelser dæmpes ikke');
+});
+
+test('sikkerhedskopi: gem og gendan giver samme fremskridt og samme optagelser', () => {
+  const counts = { spell: 4, math: 7, pattern: 6 };
+  const state = L.normalizeState({
+    stars: 137, settings: { uppercase: false, sound: true, name: 'Ellen' }, spell: { level: 3, streak: 2, misses: 0, done: 80 },
+    stickers: ['drage', 'raket'], stickersSeen: 1, customWords: [{ word: 'hund' }, { word: 'kat' }],
+    history: [{ date: '2026-10-11', area: 'spell', total: 10, firstTry: 7 }], wordStats: { hund: { seen: 2, misses: 1, okInRow: 0 } },
+  }, counts);
+  const bytes = new Uint8Array([0, 1, 2, 250, 255, 128]);
+  const backup = L.makeBackup(state, [{ word: 'hund', type: 'audio/webm', bytes }], '2026-10-12T13:05:00.000Z');
+  const text = JSON.stringify(backup);
+  const r = L.parseBackup(text, counts);
+  assert.equal(r.ok, true);
+  assert.deepEqual(r.state, state);
+  assert.equal(r.recordings.length, 1);
+  assert.equal(r.recordings[0].word, 'hund');
+  assert.equal(r.recordings[0].type, 'audio/webm');
+  assert.deepEqual(Array.from(r.recordings[0].bytes), [0, 1, 2, 250, 255, 128]);
+  assert.deepEqual(r.summary, { exported: '2026-10-12T13:05:00.000Z', name: 'Ellen', stars: 137, stickers: 2, rounds: 1, words: 2, recordings: 1 });
+});
+
+test('sikkerhedskopi: forkerte filer afvises med en forklaring, og fremmede optagelser springes over', () => {
+  const counts = { spell: 4, math: 7, pattern: 6 };
+  assert.match(L.parseBackup('ikke json', counts).error, /kunne ikke læses/);
+  assert.match(L.parseBackup('{"app":"andet"}', counts).error, /ikke en sikkerhedskopi/);
+  assert.match(L.parseBackup(JSON.stringify({ app: 'stav-og-regn', format: 99, state: {} }), counts).error, /nyere version/);
+  const b = L.makeBackup(L.normalizeState({ customWords: [{ word: 'kat' }] }, counts), [], '2026-10-12T13:05:00.000Z');
+  b.recordings = [{ word: 'hund', type: 'audio/webm', data: 'AAEC' }, { word: 'kat', type: 'audio/webm', data: '%%%' }, { word: 'kat', type: 5, data: 'AAEC' }];
+  const r = L.parseBackup(JSON.stringify(b), counts);
+  assert.equal(r.ok, true);
+  assert.equal(r.recordings.length, 0, 'ord der ikke er på listen, ødelagt base64 og forkert type springes over');
+});
+
+test('sikkerhedskopi: filnavn med barnets navn og dato, kun sikre tegn', () => {
+  assert.equal(L.backupFileName('Ellen Sofie', '2026-10-12'), 'stav-og-regn-ellen-sofie-2026-10-12.json');
+  assert.equal(L.backupFileName('Åse/Ø', '2026-10-12'), 'stav-og-regn-aase-oe-2026-10-12.json');
+  assert.equal(L.backupFileName('', '2026-10-12'), 'stav-og-regn-2026-10-12.json');
+});
+
+test('dagens mål: runder i dag tælles mod målet; standard er 2, 0 slår det fra', () => {
+  const counts = { spell: 4, math: 7, pattern: 6 };
+  assert.equal(L.normalizeState(null, counts).settings.dailyGoal, 2);
+  assert.equal(L.normalizeState({ settings: { dailyGoal: 0 } }, counts).settings.dailyGoal, 0);
+  assert.equal(L.normalizeState({ settings: { dailyGoal: 99 } }, counts).settings.dailyGoal, L.DAILY_GOAL_MAX);
+  assert.equal(L.normalizeState({ settings: { dailyGoal: 1.5 } }, counts).settings.dailyGoal, 2, 'ugyldig = standard');
+  const history = [
+    { date: '2026-10-11', area: 'spell', total: 10, firstTry: 5 },
+    { date: '2026-10-12', area: 'math', total: 10, firstTry: 9 },
+  ];
+  assert.deepEqual(L.dailyProgress(history, '2026-10-12', 2), { done: 1, goal: 2, reached: false });
+  history.push({ date: '2026-10-12', area: 'words', total: 10, firstTry: 3 });
+  assert.deepEqual(L.dailyProgress(history, '2026-10-12', 2), { done: 2, goal: 2, reached: true });
+  assert.deepEqual(L.dailyProgress(history, '2026-10-12', 0), { done: 2, goal: 0, reached: false }, 'slået fra');
+});
+
+test('gemt tilstand: ugens ord typekontrolleres – små bogstaver, ingen dubletter, højst 30', () => {
+  const many = Array.from({ length: 40 }, (_, i) => ({ word: 'ord' + 'abcdefghijklmnopqrstuvwxyzæøå'[i % 29] + 'abcdefghijklmnopqrstuvwxyzæøå'[Math.floor(i / 29)] }));
+  const s = L.normalizeState({ customWords: [{ word: ['kat'] }, { word: 'Hund' }, { word: 'hund' }, { word: 42 }, ...many] }, null);
+  assert.deepEqual(s.customWords.slice(0, 2), [{ word: 'hund' }, { word: 'ordaa' }]);
+  assert.equal(s.customWords.length, L.CUSTOM_WORD_MAX);
+});
+
+test('sikkerhedskopi: en fil uden formatnummer afvises som ugyldig, ikke som "nyere version"', () => {
+  const r = L.parseBackup(JSON.stringify({ app: 'stav-og-regn', state: {} }), null);
+  assert.equal(r.ok, false);
+  assert.match(r.error, /ikke en sikkerhedskopi/);
+});
+
+test('uden internet: statusteksten siger, om alt er gemt på enheden, og hvad man skal gøre ellers', () => {
+  const ok = L.offlineStatusText({ total: 241, missing: 0 }, { supported: true, online: false });
+  assert.equal(ok.level, 'ok');
+  assert.match(ok.text, /Klar til brug uden internet/);
+  const busy = L.offlineStatusText({ total: 241, missing: 200, filling: true, done: 40, todo: 200 }, { supported: true, online: true });
+  assert.equal(busy.level, 'busy');
+  assert.match(busy.text, /40 af 200/);
+  const offline = L.offlineStatusText({ total: 241, missing: 12 }, { supported: true, online: false });
+  assert.equal(offline.level, 'warn');
+  assert.match(offline.text, /12 af 241 filer mangler/);
+  assert.match(offline.text, /internettet/);
+  const failed = L.offlineStatusText({ total: 241, missing: 3 }, { supported: true, online: true });
+  assert.match(failed.text, /kunne ikke hentes/);
+  assert.equal(L.offlineStatusText(null, { supported: false, online: true }).level, 'warn');
+  assert.equal(L.offlineStatusText(null, { supported: true, online: true }).level, 'busy', 'intet svar endnu: appen er ved at blive klar');
+  assert.equal(L.offlineStatusText({ error: true }, { supported: true, online: true }).level, 'warn');
+});

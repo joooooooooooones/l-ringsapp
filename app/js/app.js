@@ -9,9 +9,11 @@
 
   // ---------- Gemt tilstand (kun på enheden, ingen server) ----------
 
+  let loadedSaved = false; // blev der faktisk indlæst gemte data (ellers ryddes optagelser ikke op)
   function load() {
     let saved = null;
     try { saved = JSON.parse(localStorage.getItem(STORE_KEY)); } catch (e) { /* tom eller ødelagt lagring: start forfra */ }
+    loadedSaved = !!(saved && typeof saved === 'object');
     return L.normalizeState(saved, LEVEL_COUNTS);
   }
 
@@ -48,7 +50,20 @@
     buffers: new Map(),
     playing: [],
     token: 0,
+    recorded: new Set(), // ugens ord, som forælderen har optaget (se recordings.js)
   };
+
+  const R = window.RECORDINGS;
+  let recordingsPersistent = true;
+  R.persistent().then((p) => { recordingsPersistent = p; });
+  R.words().then((words) => {
+    // Optagelser til ord, der ikke længere er på listen, ryddes op – men kun når de gemte data
+    // faktisk kunne læses; ellers ville en ødelagt eller ryddet lagring også slette optagelserne.
+    const orphans = loadedSaved ? L.orphanRecordings(words, state.customWords) : [];
+    orphans.forEach((w) => R.remove(w));
+    audio.recorded = new Set(words.filter((w) => !orphans.includes(w)));
+    if (!$('#screen-parent').hidden) renderCustomWords();
+  });
 
   fetch('audio/manifest.json')
     .then((r) => (r.ok ? r.json() : { clips: [] }))
@@ -85,6 +100,47 @@
     return audio.buffers.get(key);
   }
 
+  // Forælderens optagelse: afkodes, stilhed skæres fra, og stille optagelser forstærkes.
+  function loadRecording(word) {
+    const key = 'rec:' + word;
+    if (!audio.buffers.has(key)) {
+      const ctx = audioCtx();
+      audio.buffers.set(key, R.get(word)
+        .then((rec) => (rec ? ctx.decodeAudioData(rec.data.slice(0)) : null))
+        .then((buf) => (buf ? prepareRecording(ctx, buf) : null))
+        .catch(() => null)
+        .then((buf) => {
+          // Kan optagelsen ikke afspilles her (f.eks. et format fra en anden enhed), vises den ikke som lyd.
+          if (!buf && audio.recorded.delete(word) && !$('#screen-parent').hidden) renderCustomWords();
+          return buf;
+        }));
+    }
+    return audio.buffers.get(key);
+  }
+
+  function prepareRecording(ctx, buf) {
+    const range = L.trimSilence(buf.getChannelData(0), buf.sampleRate);
+    if (!range) return null;
+    const out = ctx.createBuffer(buf.numberOfChannels, range.end - range.start, buf.sampleRate);
+    let peak = 0;
+    for (let c = 0; c < buf.numberOfChannels; c++) {
+      const part = buf.getChannelData(c).subarray(range.start, range.end);
+      for (let i = 0; i < part.length; i++) peak = Math.max(peak, Math.abs(part[i]));
+      out.copyToChannel(part, c);
+    }
+    const gain = L.recordingGain(peak);
+    if (gain !== 1) {
+      for (let c = 0; c < out.numberOfChannels; c++) {
+        const d = out.getChannelData(c);
+        for (let i = 0; i < d.length; i++) d[i] *= gain;
+      }
+    }
+    return out;
+  }
+
+  // Kan ordet læses op (indbygget lydklip eller forælderens optagelse)?
+  const hasVoice = (word) => audio.recorded.has(word) || audio.available.has(window.DATA.audioKey(word));
+
   function stopSpeech() {
     audio.token++;
     audio.playing.forEach((src) => { try { src.stop(); } catch (e) { /* allerede stoppet */ } });
@@ -107,12 +163,20 @@
   }
 
   // Læser en eller flere tekster op efter hinanden, f.eks. say('kat', 'Stav ordet.').
-  async function say(...texts) {
+  // Et optaget ord (ugens ord) læses med forælderens stemme.
+  const say = (...texts) => speak(texts, false);
+
+  // force: læs op, selv om lyden er slået fra (forælderen afprøver en optagelse).
+  async function speak(texts, force) {
     stopSpeech();
-    if (!state.settings.sound || !audioCtx()) return 0;
+    if ((!state.settings.sound && !force) || !audioCtx()) return 0;
     const my = audio.token;
-    const keys = texts.filter(Boolean).map(window.DATA.audioKey).filter((k) => audio.available.has(k));
-    const buffers = await Promise.all(keys.map(loadClip));
+    const loads = texts.filter(Boolean).map((t) => {
+      if (audio.recorded.has(t)) return loadRecording(t);
+      const k = window.DATA.audioKey(t);
+      return audio.available.has(k) ? loadClip(k) : null;
+    }).filter(Boolean);
+    const buffers = await Promise.all(loads);
     if (my !== audio.token) return 0;
     return playBuffers(buffers, true);
   }
@@ -152,16 +216,31 @@
 
   function show(name) {
     document.querySelectorAll('.screen').forEach((s) => { s.hidden = s.id !== 'screen-' + name; });
+    if (name === 'play' && area) document.body.dataset.area = area;
+    else delete document.body.dataset.area;
     if (name !== 'play') {
       clearTaskTimers();
       stopSpeech();
     }
+    if (name !== 'parent') stopRecording(true);
     if (name === 'home') {
       renderHome();
       if (typeof reloadIfHome === 'function') setTimeout(reloadIfHome, 0);
     }
     if (name === 'home' || name === 'parent') updateInstallUi();
-    if (name === 'parent') renderParent();
+    if (name === 'parent') {
+      renderOffline();
+      askOffline(navigator.onLine);
+    }
+    if (name === 'parent') {
+      // Beskeder og ventende valg fra sidste besøg ryddes, når siden åbnes (ikke ved hver gentegning).
+      freshWords = new Set();
+      recordError('');
+      backupMessage();
+      $('#backup-confirm').hidden = true;
+      pendingBackup = null;
+      renderParent();
+    }
     if (name === 'album') renderAlbum();
   }
 
@@ -209,6 +288,26 @@
     $('#go-words').hidden = n === 0;
     $('#words-level-label').textContent = `${n} ord at øve`;
     $('#album-new').hidden = !(state.stickersSeen < state.stickers.length);
+    renderGoal();
+  }
+
+  const todayProgress = () => L.dailyProgress(state.history, L.localDate(new Date()), state.settings.dailyGoal);
+
+  // Pokaler for dagens mål: en pr. runde, tændt når runden er lavet.
+  function goalCups(p) {
+    const n = Math.max(p.goal, Math.min(p.done, L.DAILY_GOAL_MAX));
+    return Array.from({ length: n }, (_, i) => el('span', i < p.done ? 'goal-cup on' : 'goal-cup', '🏆'));
+  }
+
+  function renderGoal() {
+    const p = todayProgress();
+    const box = $('#goal');
+    box.hidden = p.goal === 0;
+    if (!p.goal) return;
+    box.classList.toggle('reached', p.reached);
+    $('#goal-cups').replaceChildren(...goalCups(p));
+    $('#goal-text').textContent = p.reached ? 'Nået! 🎉' : `${p.done} af ${p.goal} runder`;
+    box.setAttribute('aria-label', p.reached ? `Dagens mål er nået: ${p.done} runder i dag` : `Dagens mål: ${p.done} af ${p.goal} runder`);
   }
 
   $('#go-spell').addEventListener('click', () => startArea('spell'));
@@ -240,7 +339,11 @@
   // Fremdriftslinje øverst: ét felt pr. opgave i runden.
   function renderRound() {
     const bar = $('#round');
-    bar.replaceChildren(...Array.from({ length: L.ROUND_LENGTH }, (_, i) => el('span', i < round.done ? 'seg on' : 'seg')));
+    const done = round.done >= L.ROUND_LENGTH;
+    bar.replaceChildren(
+      ...Array.from({ length: L.ROUND_LENGTH }, (_, i) => el('span', i < round.done ? 'seg on' : i === round.done ? 'seg now' : 'seg')),
+      el('span', done ? 'round-goal on' : 'round-goal', '🏆'),
+    );
     bar.setAttribute('aria-label', `Opgave ${Math.min(round.done + 1, L.ROUND_LENGTH)} af ${L.ROUND_LENGTH}`);
   }
 
@@ -265,7 +368,7 @@
     let msg, praise;
     if (change > 0) {
       praise = P.newLevel;
-      msg = 'Nyt niveau! 🎉';
+      msg = 'Nyt niveau!';
       sfx('level');
       celebrate(30);
     } else {
@@ -275,7 +378,7 @@
       sfx('good');
       celebrate(12);
     }
-    $('#feedback').textContent = msg;
+    showFeedback(msg, change > 0);
     // Vent til oplæsningen er færdig, før næste opgave kommer.
     const minWait = change > 0 ? 2800 : 1900;
     say(...spoken, praise).then((secs) => {
@@ -312,6 +415,17 @@
       stars,
       el('p', 'round-sub', `${r.done} opgaver · ${r.firstTry} rigtige i første forsøg`),
     );
+    // Dagens mål: pokalerne vises, og det fejres, når målet lige er nået.
+    const goal = todayProgress();
+    const goalJustReached = goal.reached && goal.done === goal.goal;
+    if (goal.goal) {
+      const g = el('div', 'goal goal-round' + (goal.reached ? ' reached' : ''));
+      const cups = el('span', 'goal-cups');
+      cups.append(...goalCups(goal));
+      g.append(el('span', 'goal-label', 'Dagens mål'), cups, el('span', 'goal-text', goal.reached ? 'Nået! 🎉' : `${goal.done} af ${goal.goal}`));
+      praiseCol.append(g);
+    }
+    if (goalJustReached) praiseCol.querySelector('.round-title').textContent = name ? `Dagens mål er nået, ${name}!` : 'Dagens mål er nået!';
     box.append(praiseCol, rewardCol);
     if (won.length) {
       const reveal = el('button', 'sticker-reveal');
@@ -330,9 +444,16 @@
     $('#task').replaceChildren(box);
     armTask();
     sfx('level');
-    celebrate(40);
-    say(P.roundDone, ...(won.length ? [P.newSticker, ...won.map((st) => st.name)] : []));
+    celebrate(goalJustReached ? 70 : 40);
+    say(goalJustReached ? P.goalReached : P.roundDone, ...(won.length ? [P.newSticker, ...won.map((st) => st.name)] : []));
     again.focus();
+  }
+
+  // Ros som et banner med flueben under opgaven.
+  function showFeedback(msg, level) {
+    const pill = el('span', level ? 'feedback-pill level' : 'feedback-pill');
+    pill.append(el('span', 'feedback-check', level ? '★' : '✓'), el('span', null, msg));
+    $('#feedback').replaceChildren(pill);
   }
 
   function wrong(btn) {
@@ -479,7 +600,10 @@
     const look = el('div', 'look-card');
     const shown = el('div', 'look-word', t.letters.map(fmt).join(''));
     const ready = el('button', 'big-action words', 'Klar! 🙈');
-    look.append(el('p', 'look-title', 'Kig godt på ordet'), shown, ready);
+    const wordRow = el('div', 'look-word-row');
+    wordRow.append(shown);
+    if (hasVoice(w.word)) wordRow.append(speakerButton(w.word));
+    look.append(el('p', 'look-title', 'Kig godt på ordet'), wordRow, ready);
     root.append(look);
     say(P.lookAtWord, w.word);
     const myTask = task;
@@ -530,7 +654,10 @@
         });
       }, 1800);
     });
-    root.append(el('p', 'look-title', P.spellFromMemory), slots, tiles, peek);
+    const title = el('div', 'question-row');
+    title.append(el('p', 'look-title', P.spellFromMemory));
+    if (hasVoice(t.word)) title.append(speakerButton(t.word));
+    root.append(title, slots, tiles, peek);
     say(P.spellFromMemory);
     tiles.firstChild.focus();
   }
@@ -719,6 +846,7 @@
 
   const parentBtn = $('#parent-btn');
   let holdTimer = null;
+  let freshWords = new Set(); // ord tilføjet lige nu – fremhæves i listen
 
   parentBtn.addEventListener('pointerdown', (e) => {
     e.preventDefault();
@@ -746,8 +874,11 @@
     $('#spell-level-set').textContent = levelLabel('spell');
     $('#math-level-set').textContent = levelLabel('math');
     $('#pattern-level-set').textContent = levelLabel('pattern');
+    const g = state.settings.dailyGoal;
+    $('#goal-set').textContent = g ? `${g} ${g === 1 ? 'runde' : 'runder'} om dagen` : 'Slået fra';
     renderWeek();
     renderCustomWords();
+    renderKpis();
     $('#stats').textContent =
       `I alt: ${state.stars} stjerner · ${state.spell.done} staveopgaver · ${state.math.done} regneopgaver · ${state.pattern.done} mønstre · ${state.stickers.length} klistermærker`;
     // Kun ord der kan komme lige nu (stave-niveauets ordliste + ugens ord), så listen passer med teksten.
@@ -764,6 +895,29 @@
     }));
     if (!hard.length) chips.append(el('p', 'note', 'Ingen svære ord lige nu. 🎉'));
     $('#voice-status').textContent = `${audio.available.size} lydklip installeret.`;
+    renderBackup();
+  }
+
+  // Nøgletal øverst på voksensiden: det man oftest vil vide, uden at scrolle.
+  function renderKpis() {
+    const today = todayProgress();
+    const week = L.weekSummary(state.history, new Date());
+    const rounds = week.days.reduce((n, d) => n + d.rounds, 0);
+    const areas = Object.values(week.areas);
+    const tasks = areas.reduce((n, a) => n + a.tasks, 0);
+    const first = areas.reduce((n, a) => n + a.firstTry, 0);
+    const tiles = [
+      ['🏆', 'Runder i dag', today.goal ? `${today.done} af ${today.goal}` : String(today.done), today.reached ? 'good' : ''],
+      ['📊', 'Runder i ugen', String(rounds), ''],
+      ['🎯', 'Rigtige i første forsøg', tasks ? `${Math.round((first / tasks) * 100)} %` : '–', ''],
+      ['📒', 'Klistermærker', `${state.stickers.length} af ${STICKERS.length}`, ''],
+    ];
+    $('#kpis').replaceChildren(...tiles.map(([icon, label, value, mod]) => {
+      const t = el('div', 'kpi' + (mod ? ' ' + mod : ''));
+      t.append(el('span', 'kpi-icon', icon), el('span', 'kpi-value', value), el('span', 'kpi-label', label));
+      t.querySelector('.kpi-icon').setAttribute('aria-hidden', 'true');
+      return t;
+    }));
   }
 
   const AREA_NAMES = { spell: 'Stave', math: 'Regne', pattern: 'Mønstre', words: 'Ugens ord' };
@@ -807,45 +961,221 @@
     else stats.prepend(el('p', 'note area-stat-head', 'Rigtige i første forsøg'));
   }
 
+  // Ugens ord som rækker: ordet, optag/hør med forælderens stemme, og fjern.
   function renderCustomWords() {
     const list = $('#custom-words');
+    const canRecord = recordingSupported();
     list.replaceChildren(...state.customWords.map(({ word }) => {
-      const c = el('span', 'chip words-chip');
+      const row = el('div', 'word-row' + (freshWords.has(word) ? ' fresh' : ''));
+      const recording = recorder && recorder.word === word;
+      const starting = startingWord === word;
+      const has = audio.recorded.has(word);
+      const name = el('span', 'word-row-name');
+      name.append(el('strong', null, word), el('span', 'word-row-status', recording ? '● Sig ordet nu …' : starting ? 'Starter mikrofonen …' : has ? '✓ Din stemme' : hasVoice(word) ? 'Indbygget lyd' : 'Ingen lyd endnu'));
+      row.append(name);
+      if (has && !recording) {
+        const play = el('button', 'small-btn', '▶ Hør');
+        play.type = 'button';
+        play.setAttribute('aria-label', `Hør ${word}`);
+        play.addEventListener('click', () => speak([word], true));
+        row.append(play);
+      }
+      if (canRecord) {
+        const rec = el('button', 'small-btn ' + (recording ? 'rec-stop' : has ? '' : 'rec'), recording ? '■ Stop' : has ? '🎤 Igen' : '🎤 Optag');
+        rec.type = 'button';
+        rec.setAttribute('aria-label', recording ? 'Stop optagelsen' : `Optag ${word} med din stemme`);
+        rec.disabled = !!startingWord;
+        rec.addEventListener('click', () => (recording ? stopRecording() : recordWord(word)));
+        row.append(rec);
+      }
       const remove = el('button', 'chip-remove', '×');
+      remove.type = 'button';
       remove.setAttribute('aria-label', `Fjern ${word}`);
       remove.addEventListener('click', () => {
+        // Har ordet en optagelse, kræves to tryk, så den ikke slettes ved et uheld.
+        if (has && !remove.classList.contains('armed')) {
+          remove.classList.add('armed');
+          remove.textContent = 'Slet?';
+          remove.setAttribute('aria-label', `Tryk igen for at slette ${word} og optagelsen`);
+          setTimeout(() => {
+            remove.classList.remove('armed');
+            remove.textContent = '×';
+            remove.setAttribute('aria-label', `Fjern ${word}`);
+          }, 4000);
+          return;
+        }
+        recordError('');
+        if ((recorder && recorder.word === word) || startingWord === word) stopRecording(true);
         L.removeCustomWord(state, word);
         forgetCustomStats([word]);
+        forgetRecordings([word]);
         save();
         renderCustomWords();
       });
-      c.append(el('strong', null, word), remove);
-      return c;
+      row.append(remove);
+      return row;
     }));
     const n = state.customWords.length;
-    $('#words-note').textContent = n
-      ? `${n} ord. De øves under "Ugens ord" på forsiden: ordet vises, skjules og staves med brikker. Egne ord bliver ikke læst op, så læs gerne ordet højt sammen med barnet.`
-      : 'Skriv ugens ord fra skolen, så kan de øves under "Ugens ord" på forsiden.';
+    const missing = state.customWords.filter((w) => !hasVoice(w.word)).length;
+    $('#words-note').textContent = !n
+      ? 'Skriv ugens ord fra skolen, så kan de øves under "Ugens ord" på forsiden.'
+      : !canRecord
+        ? `${n} ord. De øves under "Ugens ord" på forsiden. Denne browser kan ikke optage lyd, så læs gerne ordene højt sammen med barnet.`
+        : !recordingsPersistent
+          ? `${n} ord. Denne browser (måske et privat vindue) kan ikke gemme optagelser, efter appen lukkes. Brug en almindelig fane eller den installerede app.`
+        : missing
+          ? `${n} ord. Tryk 🎤 Optag og sig ordet tydeligt, så bliver det læst op med din stemme, og barnet kan øve alene. ${missing} mangler lyd.`
+          : `${n} ord, alle med lyd. De øves under "Ugens ord" på forsiden: ordet læses op, vises, skjules og staves med brikker.`;
     $('#clear-words').hidden = n === 0;
+  }
+
+  // ---------- Optag ugens ord med forælderens stemme ----------
+
+  const RECORD_MAX_MS = 3000; // et enkelt ord tager under 3 sekunder
+  let recorder = null; // { word, mr, stream, timer, cancelled }
+
+  const recordingSupported = () => !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder);
+
+  function recordError(msg) {
+    const err = $('#record-error');
+    err.textContent = msg;
+    err.hidden = !msg;
+  }
+
+  function micErrorText(e) {
+    const name = e && e.name;
+    if (name === 'NotAllowedError' || name === 'SecurityError') return 'Mikrofonen er blokeret. Tillad mikrofon for siden i browserens indstillinger (låse-ikonet ved adressen), og prøv igen.';
+    if (name === 'NotFoundError' || name === 'OverconstrainedError') return 'Der blev ikke fundet en mikrofon på enheden.';
+    if (name === 'NotReadableError') return 'Mikrofonen bruges af en anden app. Luk den, og prøv igen.';
+    return 'Optagelsen kunne ikke starte. Prøv igen.';
+  }
+
+  let recordSeq = 0; // tæller op ved hver start og stop, så en forsinket mikrofon-tilladelse kan opdages
+  let startingWord = null; // ord, hvor mikrofonen er ved at starte
+
+  async function recordWord(word) {
+    stopRecording(true);
+    const seq = ++recordSeq;
+    stopSpeech();
+    recordError('');
+    audioCtx(); // lydsystemet skal startes i selve trykket (iPad/iPhone)
+    startingWord = word;
+    renderCustomWords();
+    let stream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
+    } catch (e) {
+      if (seq === recordSeq) {
+        startingWord = null;
+        recordError(micErrorText(e));
+        renderCustomWords();
+      }
+      return;
+    }
+    const stopTracks = () => stream.getTracks().forEach((t) => t.stop());
+    // Er der trykket på noget andet, eller er voksensiden forladt imens? Så optages der ikke.
+    if (seq !== recordSeq || $('#screen-parent').hidden || !state.customWords.some((w) => w.word === word)) {
+      stopTracks();
+      return;
+    }
+    startingWord = null;
+    const type = L.pickRecordingType((t) => MediaRecorder.isTypeSupported(t));
+    let mr;
+    try {
+      mr = type ? new MediaRecorder(stream, { mimeType: type }) : new MediaRecorder(stream);
+    } catch (e) {
+      stopTracks();
+      recordError('Optagelsen kunne ikke starte. Prøv igen.');
+      renderCustomWords();
+      return;
+    }
+    const chunks = [];
+    const me = { word, mr, timer: null, cancelled: false };
+    recorder = me;
+    mr.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
+    mr.onstop = () => {
+      stopTracks();
+      clearTimeout(me.timer);
+      if (recorder === me) recorder = null;
+      if (me.cancelled) {
+        if (!$('#screen-parent').hidden) renderCustomWords();
+        return;
+      }
+      saveRecording(word, new Blob(chunks, { type: mr.mimeType || type || 'audio/webm' }));
+    };
+    mr.start();
+    // Timeren stopper sin egen optagelse – aldrig en anden, der er startet siden.
+    me.timer = setTimeout(() => { if (mr.state !== 'inactive') mr.stop(); }, RECORD_MAX_MS);
+    renderCustomWords();
+  }
+
+  // cancel: afbryd uden at gemme (f.eks. når voksensiden forlades midt i en optagelse).
+  // Afbryder også en mikrofon, der er ved at starte.
+  function stopRecording(cancel) {
+    if (startingWord) {
+      recordSeq++;
+      startingWord = null;
+    }
+    if (!recorder) return;
+    recorder.cancelled = !!cancel;
+    clearTimeout(recorder.timer);
+    if (recorder.mr.state !== 'inactive') recorder.mr.stop();
+  }
+
+  async function saveRecording(word, blob) {
+    try {
+      const data = await blob.arrayBuffer();
+      const ctx = audioCtx();
+      const buf = ctx ? await ctx.decodeAudioData(data.slice(0)) : null;
+      if (!buf || !L.trimSilence(buf.getChannelData(0), buf.sampleRate)) {
+        recordError(`Der kom ingen lyd med på "${word}". Hold telefonen tæt på munden, og prøv igen.`);
+      } else if (state.customWords.some((w) => w.word === word)) {
+        if (!(await R.put({ word, type: blob.type, data }))) {
+          recordError('Optagelsen kunne ikke gemmes på enheden (er lageret fuldt?). Prøv igen.');
+        } else if (!state.customWords.some((w) => w.word === word)) {
+          R.remove(word); // ordet blev fjernet, mens optagelsen blev gemt
+        } else {
+          audio.recorded.add(word);
+          audio.buffers.delete('rec:' + word);
+          speak([word], true); // afspil med det samme, så forælderen kan høre, om den er god
+        }
+      }
+    } catch (e) {
+      recordError('Optagelsen kunne ikke gemmes. Prøv igen.');
+    }
+    if (!$('#screen-parent').hidden) renderCustomWords();
+  }
+
+  function forgetRecordings(words) {
+    for (const w of words) {
+      if (!audio.recorded.has(w)) continue;
+      audio.recorded.delete(w);
+      audio.buffers.delete('rec:' + w);
+      R.remove(w);
+    }
   }
 
   $('#word-form').addEventListener('submit', (e) => {
     e.preventDefault();
     const input = $('#word-input');
-    const r = L.addCustomWord(state, input.value);
+    const { added, rejected } = L.addCustomWords(state, input.value);
     const err = $('#word-error');
-    if (!r.ok) {
-      err.textContent = r.error;
+    if (added.length) {
+      freshWords = new Set(added);
+      save();
+      renderCustomWords();
+    }
+    // De afviste ord bliver stående i feltet, så de kan rettes.
+    input.value = rejected.map((r) => r.text).join(' ');
+    if (rejected.length) {
+      err.textContent = rejected.map((r) => (r.text ? `"${r.text}": ${r.error}` : r.error)).join(' ');
       err.hidden = false;
       input.setAttribute('aria-invalid', 'true');
-      return;
+    } else {
+      err.hidden = true;
+      input.removeAttribute('aria-invalid');
     }
-    err.hidden = true;
-    input.removeAttribute('aria-invalid');
-    input.value = '';
     input.focus();
-    save();
-    renderCustomWords();
   });
   $('#word-input').addEventListener('input', () => {
     $('#word-error').hidden = true;
@@ -879,7 +1209,10 @@
   }
 
   twoTapButton($('#clear-words'), 'Tryk igen for at rydde listen', () => {
+    stopRecording(true);
+    recordError('');
     forgetCustomStats(state.customWords.map((w) => w.word));
+    forgetRecordings(state.customWords.map((w) => w.word));
     state.customWords = [];
     save();
     renderCustomWords();
@@ -909,6 +1242,161 @@
     save();
     renderParent();
   }));
+  // ---------- Sikkerhedskopi ----------
+
+  const BACKUP_DATE_KEY = 'stav-og-regn-sidste-kopi';
+  let pendingBackup = null; // indlæst fil, der venter på bekræftelse
+  let persistAsked = false;
+
+  function lastBackupDate() {
+    try { return localStorage.getItem(BACKUP_DATE_KEY) || ''; } catch (e) { return ''; }
+  }
+
+  const longDate = (d) => d.toLocaleDateString('da-DK', { day: 'numeric', month: 'long', year: 'numeric' });
+
+  async function renderBackup() {
+    const last = lastBackupDate();
+    const [y, m, d] = last.split('-').map(Number);
+    let persisted = false;
+    try {
+      // Beder browseren om ikke at rydde data, når enheden mangler plads (voksen er til stede her).
+      // Kun én gang pr. åbning af appen, så Firefox ikke spørger igen og igen.
+      if (navigator.storage && navigator.storage.persist) {
+        persisted = await navigator.storage.persisted();
+        if (!persisted && !persistAsked) {
+          persistAsked = true;
+          persisted = await navigator.storage.persist();
+        }
+      }
+    } catch (e) { /* ikke understøttet */ }
+    $('#backup-status').textContent = [
+      'Alt gemmes kun på denne enhed. Gem en kopi, før du skifter telefon eller rydder browseren – den kan gendannes på en ny enhed.',
+      last ? `Senest gemt: ${longDate(new Date(y, m - 1, d))}.` : 'Der er ikke gemt en sikkerhedskopi endnu.',
+      persisted ? '' : 'Browseren kan rydde appens data, hvis enheden mangler plads.',
+    ].filter(Boolean).join(' ');
+  }
+
+  function backupMessage(ok, err) {
+    $('#backup-ok').textContent = ok || '';
+    $('#backup-ok').hidden = !ok;
+    $('#backup-error').textContent = err || '';
+    $('#backup-error').hidden = !err;
+  }
+
+  $('#backup-save').addEventListener('click', async () => {
+    const btn = $('#backup-save');
+    if (btn.disabled) return;
+    btn.disabled = true; // et dobbelttryk må ikke give både del-menu og download
+    backupMessage();
+    try {
+      const recs = await R.all();
+      const recordings = recs
+        .filter((r) => state.customWords.some((w) => w.word === r.word))
+        .map((r) => ({ word: r.word, type: r.type, bytes: new Uint8Array(r.data) }));
+      const today = L.localDate(new Date());
+      const json = JSON.stringify(L.makeBackup(state, recordings, new Date().toISOString()));
+      const name = L.backupFileName(state.settings.name, today);
+      const file = new File([json], name, { type: 'application/json' });
+      let shared = false;
+      // Telefon: del-menuen giver mulighed for at gemme i Drev, Filer eller sende på mail.
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        try {
+          await navigator.share({ files: [file], title: 'Stav og Regn – sikkerhedskopi' });
+          shared = true;
+        } catch (e) {
+          if (e && e.name === 'AbortError') return;
+        }
+      }
+      if (!shared) {
+        const a = el('a');
+        a.href = URL.createObjectURL(file);
+        a.download = name;
+        document.body.append(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+      }
+      try { localStorage.setItem(BACKUP_DATE_KEY, today); } catch (e) { /* ignorer */ }
+      backupMessage(`✓ Sikkerhedskopien "${name}" er gemt.`);
+      renderBackup();
+    } catch (e) {
+      backupMessage('', 'Sikkerhedskopien kunne ikke gemmes. Prøv igen.');
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  $('#backup-load').addEventListener('click', () => {
+    backupMessage();
+    $('#backup-file').value = '';
+    $('#backup-file').click();
+  });
+
+  $('#backup-file').addEventListener('change', async (e) => {
+    const f = e.target.files && e.target.files[0];
+    if (!f) return;
+    const r = L.parseBackup(await f.text(), LEVEL_COUNTS);
+    if (!r.ok) {
+      pendingBackup = null;
+      $('#backup-confirm').hidden = true;
+      backupMessage('', r.error);
+      return;
+    }
+    pendingBackup = r;
+    backupMessage();
+    const s = r.summary;
+    const when = s.exported && !Number.isNaN(Date.parse(s.exported)) ? ` fra ${longDate(new Date(s.exported))}` : '';
+    $('#backup-summary').textContent = `Sikkerhedskopi${when}${s.name ? ` (${s.name})` : ''}: ${s.stars} stjerner · ${s.stickers} klistermærker · ${s.rounds} runder · ${s.words} ugens ord${s.recordings ? ` (${s.recordings} med lyd)` : ''}.`;
+    $('#backup-confirm').hidden = false;
+    $('#backup-apply').focus();
+  });
+
+  $('#backup-cancel').addEventListener('click', () => {
+    pendingBackup = null;
+    $('#backup-confirm').hidden = true;
+  });
+
+  $('#backup-apply').addEventListener('click', async () => {
+    if (!pendingBackup) return;
+    const r = pendingBackup;
+    pendingBackup = null;
+    stopRecording(true);
+    $('#backup-apply').disabled = true;
+    // Kun optagelser, der kan afspilles på denne enhed (en kopi kan komme fra en anden slags telefon).
+    const ctx = audioCtx();
+    const playable = [];
+    for (const rec of r.recordings) {
+      const data = rec.bytes.buffer.slice(rec.bytes.byteOffset, rec.bytes.byteOffset + rec.bytes.byteLength);
+      try {
+        if (ctx) await ctx.decodeAudioData(data.slice(0));
+        playable.push({ word: rec.word, type: rec.type, data });
+      } catch (e) { /* springes over */ }
+    }
+    // Optagelserne erstattes i én omgang (alt eller intet), før fremskridtet skiftes.
+    const ok = await R.replaceAll(playable);
+    $('#backup-apply').disabled = false;
+    if (!ok) {
+      backupMessage('', 'Sikkerhedskopien kunne ikke gendannes (lageret svarede ikke). Intet er ændret. Prøv igen.');
+      $('#backup-confirm').hidden = true;
+      return;
+    }
+    state = r.state;
+    save();
+    audio.recorded = new Set(playable.map((rec) => rec.word));
+    for (const k of Array.from(audio.buffers.keys())) if (k.startsWith('rec:')) audio.buffers.delete(k);
+    $('#backup-confirm').hidden = true;
+    renderParent();
+    const skipped = r.recordings.length - playable.length;
+    backupMessage(`✓ Sikkerhedskopien er gendannet.${skipped ? ` ${skipped} optagelse${skipped === 1 ? '' : 'r'} kunne ikke afspilles på denne enhed – optag ${skipped === 1 ? 'den' : 'dem'} igen.` : ''}`);
+  });
+
+  document.querySelectorAll('[data-goal]').forEach((b) => b.addEventListener('click', () => {
+    const g = state.settings.dailyGoal + Number(b.dataset.goal);
+    state.settings.dailyGoal = Math.min(Math.max(0, g), L.DAILY_GOAL_MAX);
+    save();
+    renderParent();
+  }));
+
   twoTapButton($('#reset'), 'Tryk igen for at nulstille', () => {
     state = { ...L.defaultState(), settings: state.settings, customWords: state.customWords };
     save();
@@ -985,6 +1473,49 @@
     else dlg.removeAttribute('open');
   });
 
+  // ---------- Brug uden internet ----------
+  //
+  // Service workeren gemmer appen og alle lydklip på enheden. Voksensiden viser, om alt er gemt,
+  // og henter det, der mangler, når der er net – så man kan se, at appen er klar, før tabletten
+  // bruges uden internet.
+
+  const offlineSupported = 'serviceWorker' in navigator && 'caches' in window;
+  let offlineState = null; // seneste svar fra service workeren
+
+  function renderOffline() {
+    const r = L.offlineStatusText(offlineState, { supported: offlineSupported, online: navigator.onLine });
+    const p = $('#offline-status');
+    p.textContent = r.text;
+    p.dataset.level = r.level;
+    $('#offline-fill').hidden = !(r.level === 'warn' && offlineSupported && navigator.onLine && !(offlineState && offlineState.filling));
+  }
+
+  // fill: hent manglende filer nu. Uden svar inden for 15 s (f.eks. service worker ikke startet) vises en fejl.
+  function askOffline(fill) {
+    if (!offlineSupported) return;
+    let answered = false;
+    setTimeout(() => {
+      if (answered) return;
+      if (!offlineState || offlineState.filling) offlineState = { error: true };
+      renderOffline();
+    }, 15000);
+    navigator.serviceWorker.ready.then((reg) => {
+      if (!reg.active) return;
+      const ch = new MessageChannel();
+      ch.port1.onmessage = (e) => {
+        answered = true;
+        offlineState = e.data;
+        renderOffline();
+      };
+      reg.active.postMessage({ type: 'offline-status', fill: !!fill }, [ch.port2]);
+    });
+  }
+
+  $('#offline-fill').addEventListener('click', () => askOffline(true));
+  // Når nettet kommer tilbage, hentes det, der eventuelt mangler, i baggrunden.
+  window.addEventListener('online', () => askOffline(true));
+  window.addEventListener('offline', renderOffline);
+
   // ---------- Start ----------
 
   setAudioUi(false);
@@ -1005,6 +1536,11 @@
       updateReady = true;
       reloadIfHome();
     });
-    window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('sw.js')
+        // Hent i baggrunden det, der mangler til brug uden internet (f.eks. lydklip, der fejlede).
+        .then(() => { if (navigator.onLine) askOffline(true); })
+        .catch(() => {});
+    });
   }
 })();
