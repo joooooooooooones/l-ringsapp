@@ -391,6 +391,21 @@
     return `${BACKUP_APP}-${slug ? slug + '-' : ''}${date}.json`;
   }
 
+  // ---------- Brug uden internet ----------
+
+  // Tekst til voksensiden ud fra service workerens svar: { total, missing, filling, done, todo } eller { error }.
+  // level: 'ok' (alt gemt), 'busy' (henter), 'warn' (mangler noget, eller browseren kan ikke).
+  function offlineStatusText(s, { supported, online }) {
+    if (!supported) return { level: 'warn', text: 'Denne browser kan ikke gemme appen til brug uden internet. Brug Chrome på Android eller Safari på iPad.' };
+    if (!s) return { level: 'busy', text: 'Appen gøres klar til brug uden internet … Hold den åben et øjeblik.' };
+    if (s.error) return { level: 'warn', text: 'Det kunne ikke tjekkes, om appen er gemt på enheden. Prøv igen.' };
+    if (s.filling) return { level: 'busy', text: `Henter til brug uden internet … ${s.done} af ${s.todo} filer. Hold appen åben imens.` };
+    if (!s.missing) return { level: 'ok', text: `✓ Klar til brug uden internet. Appen og alle lydklip er gemt på enheden (${s.total} filer).` };
+    return online
+      ? { level: 'warn', text: `${s.missing} af ${s.total} filer kunne ikke hentes. Tryk "Hent det, der mangler", eller prøv senere.` }
+      : { level: 'warn', text: `${s.missing} af ${s.total} filer mangler (mest lydklip). Forbind enheden til internettet, og åbn appen et øjeblik.` };
+  }
+
   // ---------- Installation ----------
 
   // Vejledning til at lægge appen på startskærmen, ud fra browserens user agent.
@@ -522,7 +537,7 @@
     HARD_WORD_CHANCE, HARD_UNTIL_OK, recordWord, hardWords, weekSummary, completeTask,
     CUSTOM_WORD_MAX, parseCustomWord, addCustomWord, addCustomWords, removeCustomWord,
     pickRecordingType, trimSilence, recordingGain, orphanRecordings,
-    makeBackup, parseBackup, backupFileName, installGuide,
+    makeBackup, parseBackup, backupFileName, offlineStatusText, installGuide,
     rand, pick, shuffle,
     defaultState, normalizeState, recordResult,
     pickWord, spellTask, makeChoices, mathTask, patternTask,

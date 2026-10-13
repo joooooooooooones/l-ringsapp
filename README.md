@@ -65,6 +65,20 @@ i stedet koble repoet til **Cloudflare Pages** eller **Netlify** (begge gratis) 
 2. Tryk på menuen (⋮) → **Installér app** / **Føj til startskærm**.
 3. Appen får sit eget ikon og åbner i fuld skærm – også uden internet.
 
+## Brug uden internet
+
+Appen skal have internet **én gang**, når den lægges på tabletten. Derefter ligger appen og alle
+lydklip (ca. 2 MB) på tabletten, og den virker helt uden internet.
+
+1. Åbn adressen med internet, og installér appen (se ovenfor).
+2. Hold ⚙️ nede → **Indstillinger → Brug uden internet**. Vent, til der står
+   **"✓ Klar til brug uden internet"**. Mangler der noget, hentes det automatisk, eller tryk
+   **Hent det, der mangler**.
+3. Nu kan tabletten køre uden internet. Fremskridt, ugens ord og optagelser gemmes på tabletten.
+
+Nye versioner hentes kun, når tabletten har internet. Afbrydes nettet midt i en opdatering, beholder
+appen de lydklip, den allerede har, så den aldrig bliver stum.
+
 ## Lyd og oplæsning
 
 Appen bruger **færdige lydfiler** i `app/audio/` i stedet for telefonens robotstemme. Det betyder

@@ -229,6 +229,10 @@
     }
     if (name === 'home' || name === 'parent') updateInstallUi();
     if (name === 'parent') {
+      renderOffline();
+      askOffline(navigator.onLine);
+    }
+    if (name === 'parent') {
       // Beskeder og ventende valg fra sidste besøg ryddes, når siden åbnes (ikke ved hver gentegning).
       freshWords = new Set();
       recordError('');
@@ -1469,6 +1473,49 @@
     else dlg.removeAttribute('open');
   });
 
+  // ---------- Brug uden internet ----------
+  //
+  // Service workeren gemmer appen og alle lydklip på enheden. Voksensiden viser, om alt er gemt,
+  // og henter det, der mangler, når der er net – så man kan se, at appen er klar, før tabletten
+  // bruges uden internet.
+
+  const offlineSupported = 'serviceWorker' in navigator && 'caches' in window;
+  let offlineState = null; // seneste svar fra service workeren
+
+  function renderOffline() {
+    const r = L.offlineStatusText(offlineState, { supported: offlineSupported, online: navigator.onLine });
+    const p = $('#offline-status');
+    p.textContent = r.text;
+    p.dataset.level = r.level;
+    $('#offline-fill').hidden = !(r.level === 'warn' && offlineSupported && navigator.onLine && !(offlineState && offlineState.filling));
+  }
+
+  // fill: hent manglende filer nu. Uden svar inden for 15 s (f.eks. service worker ikke startet) vises en fejl.
+  function askOffline(fill) {
+    if (!offlineSupported) return;
+    let answered = false;
+    setTimeout(() => {
+      if (answered) return;
+      if (!offlineState || offlineState.filling) offlineState = { error: true };
+      renderOffline();
+    }, 15000);
+    navigator.serviceWorker.ready.then((reg) => {
+      if (!reg.active) return;
+      const ch = new MessageChannel();
+      ch.port1.onmessage = (e) => {
+        answered = true;
+        offlineState = e.data;
+        renderOffline();
+      };
+      reg.active.postMessage({ type: 'offline-status', fill: !!fill }, [ch.port2]);
+    });
+  }
+
+  $('#offline-fill').addEventListener('click', () => askOffline(true));
+  // Når nettet kommer tilbage, hentes det, der eventuelt mangler, i baggrunden.
+  window.addEventListener('online', () => askOffline(true));
+  window.addEventListener('offline', renderOffline);
+
   // ---------- Start ----------
 
   setAudioUi(false);
@@ -1489,6 +1536,11 @@
       updateReady = true;
       reloadIfHome();
     });
-    window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('sw.js')
+        // Hent i baggrunden det, der mangler til brug uden internet (f.eks. lydklip, der fejlede).
+        .then(() => { if (navigator.onLine) askOffline(true); })
+        .catch(() => {});
+    });
   }
 })();

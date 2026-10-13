@@ -748,6 +748,9 @@ body[data-area] {
 .btn-row { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 .confirm { display: grid; gap: var(--space-2); padding: var(--space-3); border-radius: var(--radius-s); background: var(--danger-soft); }
 .confirm-text { margin: 0; font-weight: 700; }
+.offline-status { margin: 0; padding: var(--space-2) var(--space-3); border-radius: 12px; background: var(--bg); font-weight: 400; font-size: var(--text-s); }
+.offline-status[data-level="ok"] { background: var(--good-soft); color: var(--good-dark); font-weight: 700; }
+.offline-status[data-level="warn"] { background: var(--danger-soft); color: var(--danger-ink); font-weight: 700; }
 .ok-text { margin: 0; color: var(--good-dark); font-weight: 700; font-size: var(--text-s); }
 
 /* ---------- Ugens ord ---------- */

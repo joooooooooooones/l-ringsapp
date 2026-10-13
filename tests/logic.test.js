@@ -447,3 +447,21 @@ test('sikkerhedskopi: en fil uden formatnummer afvises som ugyldig, ikke som "ny
   assert.equal(r.ok, false);
   assert.match(r.error, /ikke en sikkerhedskopi/);
 });
+
+test('uden internet: statusteksten siger, om alt er gemt på enheden, og hvad man skal gøre ellers', () => {
+  const ok = L.offlineStatusText({ total: 241, missing: 0 }, { supported: true, online: false });
+  assert.equal(ok.level, 'ok');
+  assert.match(ok.text, /Klar til brug uden internet/);
+  const busy = L.offlineStatusText({ total: 241, missing: 200, filling: true, done: 40, todo: 200 }, { supported: true, online: true });
+  assert.equal(busy.level, 'busy');
+  assert.match(busy.text, /40 af 200/);
+  const offline = L.offlineStatusText({ total: 241, missing: 12 }, { supported: true, online: false });
+  assert.equal(offline.level, 'warn');
+  assert.match(offline.text, /12 af 241 filer mangler/);
+  assert.match(offline.text, /internettet/);
+  const failed = L.offlineStatusText({ total: 241, missing: 3 }, { supported: true, online: true });
+  assert.match(failed.text, /kunne ikke hentes/);
+  assert.equal(L.offlineStatusText(null, { supported: false, online: true }).level, 'warn');
+  assert.equal(L.offlineStatusText(null, { supported: true, online: true }).level, 'busy', 'intet svar endnu: appen er ved at blive klar');
+  assert.equal(L.offlineStatusText({ error: true }, { supported: true, online: true }).level, 'warn');
+});
