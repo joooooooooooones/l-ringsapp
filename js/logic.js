@@ -13,6 +13,7 @@
   const AREAS = ['spell', 'math', 'pattern'];
   const ROUND_LENGTH = 10; // opgaver i én runde
   const HISTORY_MAX = 300; // så mange afsluttede runder gemmes
+  const DAILY_GOAL_MAX = 5; // dagens mål: 0 (slået fra) til 5 runder
 
   const rand = (rng, min, max) => Math.floor(rng() * (max - min + 1)) + min;
   const pick = (rng, arr) => arr[Math.floor(rng() * arr.length)];
@@ -31,7 +32,7 @@
   function defaultState() {
     return {
       stars: 0,
-      settings: { uppercase: true, sound: true, name: '' },
+      settings: { uppercase: true, sound: true, name: '', dailyGoal: 2 },
       spell: { level: 1, streak: 0, misses: 0, done: 0 },
       math: { level: 1, streak: 0, misses: 0, done: 0 },
       pattern: { level: 1, streak: 0, misses: 0, done: 0 },
@@ -43,27 +44,49 @@
     };
   }
 
+  // Hele tal ≥ 0; alt andet (tekst, NaN, negative tal) giver fallback.
+  const count = (v, fallback = 0) => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? Math.floor(v) : fallback);
+  const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
   // Fletter gemte data ind i standardværdierne, så ældre gemte data stadig kan åbnes.
+  // Alle værdier typekontrolleres, så også en importeret fil med fejl giver en gyldig tilstand.
   function normalizeState(saved, levelCounts) {
     const d = defaultState();
     const s = saved && typeof saved === 'object' ? saved : {};
-    const state = { ...d, ...s, settings: { ...d.settings, ...s.settings } };
+    const set = s.settings && typeof s.settings === 'object' ? s.settings : {};
+    const state = { ...d, ...s };
+    state.stars = count(s.stars);
+    state.settings = { ...d.settings };
+    for (const [k, v] of Object.entries(d.settings)) if (typeof set[k] === typeof v) state.settings[k] = set[k];
+    const goal = state.settings.dailyGoal;
+    state.settings.dailyGoal = Number.isInteger(goal) && goal >= 0 ? Math.min(goal, DAILY_GOAL_MAX) : d.settings.dailyGoal;
     state.stickers = Array.isArray(s.stickers) ? Array.from(new Set(s.stickers.filter((x) => typeof x === 'string'))) : [];
-    state.stickersSeen = Math.min(Number.isInteger(s.stickersSeen) ? s.stickersSeen : state.stickers.length, state.stickers.length);
+    state.stickersSeen = Math.min(count(s.stickersSeen, state.stickers.length), state.stickers.length);
     state.wordStats = {};
     if (s.wordStats && typeof s.wordStats === 'object') {
       for (const [w, v] of Object.entries(s.wordStats)) {
-        if (v && typeof v === 'object') state.wordStats[w] = { seen: v.seen | 0, misses: v.misses | 0, okInRow: v.okInRow | 0 };
+        if (v && typeof v === 'object') state.wordStats[w] = { seen: count(v.seen), misses: count(v.misses), okInRow: count(v.okInRow) };
       }
     }
-    state.customWords = Array.isArray(s.customWords)
-      ? s.customWords.filter((w) => w && parseCustomWord(String(w.word)).ok).map((w) => ({ word: w.word }))
+    state.customWords = [];
+    for (const w of Array.isArray(s.customWords) ? s.customWords : []) {
+      const r = w && typeof w.word === 'string' ? parseCustomWord(w.word) : { ok: false };
+      if (r.ok && state.customWords.length < CUSTOM_WORD_MAX && !state.customWords.some((x) => x.word === r.word)) state.customWords.push({ word: r.word });
+    }
+    state.history = Array.isArray(s.history)
+      ? s.history
+        .filter((r) => r && typeof r.date === 'string' && DATE_RE.test(r.date) && typeof r.area === 'string')
+        .map((r) => ({ date: r.date, area: r.area, total: count(Number(r.total)), firstTry: count(Number(r.firstTry)) }))
       : [];
-    state.history = Array.isArray(s.history) ? s.history.filter((r) => r && typeof r.date === 'string') : [];
     for (const area of AREAS) {
-      state[area] = { ...d[area], ...s[area] };
+      const p = s[area] && typeof s[area] === 'object' ? s[area] : {};
       const max = levelCounts ? levelCounts[area] : Infinity;
-      state[area].level = Math.min(Math.max(1, state[area].level), max);
+      state[area] = {
+        level: Math.min(Math.max(1, count(p.level, 1)), max),
+        streak: count(p.streak),
+        misses: count(p.misses),
+        done: count(p.done),
+      };
     }
     return state;
   }
@@ -118,6 +141,12 @@
   function localDate(d) {
     const p = (n) => String(n).padStart(2, '0');
     return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+  }
+
+  // Dagens mål: afsluttede runder i dag (date = ÅÅÅÅ-MM-DD) mod målet. goal 0 = slået fra.
+  function dailyProgress(history, date, goal) {
+    const done = history.filter((r) => r.date === date).length;
+    return { done, goal, reached: goal > 0 && done >= goal };
   }
 
   // ---------- Klistermærker ----------
@@ -231,8 +260,150 @@
     return r;
   }
 
+  // Tilføjer en hel liste, f.eks. "hund, kat mor" (adskilt af mellemrum, komma, semikolon eller linjeskift).
+  // Returnerer { added: [ord], rejected: [{ text, error }] } i samme rækkefølge som skrevet.
+  function addCustomWords(state, text) {
+    const parts = String(text).split(/[\s,;]+/).filter(Boolean);
+    if (!parts.length) return { added: [], rejected: [{ text: '', error: parseCustomWord('').error }] };
+    const added = [];
+    const rejected = [];
+    for (const part of parts) {
+      const r = addCustomWord(state, part);
+      if (r.ok) added.push(r.word);
+      else rejected.push({ text: part, error: r.error });
+    }
+    return { added, rejected };
+  }
+
   function removeCustomWord(state, word) {
     state.customWords = state.customWords.filter((w) => w.word !== word);
+  }
+
+  // ---------- Optag ugens ord ----------
+
+  // Formater i prioriteret rækkefølge: Chrome/Firefox optager webm/ogg (opus), Safari mp4.
+  const RECORDING_TYPES = ['audio/webm;codecs=opus', 'audio/mp4', 'audio/ogg;codecs=opus', 'audio/webm'];
+  function pickRecordingType(isSupported) {
+    return RECORDING_TYPES.find((t) => isSupported(t)) || ''; // '' = browserens standard
+  }
+
+  // Finder ordet i en optagelse: fra første til sidste sample over threshold, plus pad sekunders luft.
+  // Returnerer { start, end } (samples, end eksklusiv) eller null, hvis optagelsen er tavs.
+  function trimSilence(samples, sampleRate, { threshold = 0.02, pad = 0.08 } = {}) {
+    let first = -1;
+    let last = -1;
+    for (let i = 0; i < samples.length; i++) {
+      if (Math.abs(samples[i]) >= threshold) {
+        if (first < 0) first = i;
+        last = i;
+      }
+    }
+    if (first < 0) return null;
+    const p = Math.round(pad * sampleRate);
+    return { start: Math.max(0, first - p), end: Math.min(samples.length, last + 1 + p) };
+  }
+
+  // Forstærkning så en stille optagelse når 0,9 i top (som de indbyggede lydklip), højst 4 gange.
+  function recordingGain(peak) {
+    if (!(peak > 0) || peak >= 0.9) return 1;
+    return Math.min(4, 0.9 / peak);
+  }
+
+  // Optagelser til ord, der ikke længere er på listen (ryddes op, så de ikke fylder).
+  function orphanRecordings(recordedWords, customWords) {
+    const keep = new Set(customWords.map((w) => w.word));
+    return recordedWords.filter((w) => !keep.has(w));
+  }
+
+  // ---------- Sikkerhedskopi ----------
+  //
+  // Hele fremskridtet (og forælderens optagelser) som én JSON-fil, der kan gemmes og gendannes,
+  // f.eks. ved skift af telefon. Intet sendes nogen steder hen; filen gemmes af brugeren selv.
+
+  const BACKUP_APP = 'stav-og-regn';
+  const BACKUP_FORMAT = 1;
+  const RECORDING_MAX_BYTES = 2 * 1024 * 1024;
+
+  function bytesToBase64(bytes) {
+    let bin = '';
+    for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+    return btoa(bin);
+  }
+
+  function base64ToBytes(text) {
+    const bin = atob(text); // kaster ved ugyldig base64
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return bytes;
+  }
+
+  // recordings: [{ word, type, bytes (Uint8Array) }]
+  function makeBackup(state, recordings, exportedIso) {
+    return {
+      app: BACKUP_APP,
+      format: BACKUP_FORMAT,
+      exported: exportedIso,
+      state,
+      recordings: recordings.map((r) => ({ word: r.word, type: r.type, data: bytesToBase64(r.bytes) })),
+    };
+  }
+
+  // Returnerer { ok, state, recordings, summary } eller { ok: false, error }.
+  function parseBackup(text, levelCounts) {
+    let b;
+    try { b = JSON.parse(text); } catch (e) { return { ok: false, error: 'Filen kunne ikke læses. Vælg en sikkerhedskopi gemt fra Stav og Regn (.json).' }; }
+    if (!b || typeof b !== 'object' || b.app !== BACKUP_APP || !b.state || typeof b.state !== 'object') {
+      return { ok: false, error: 'Filen er ikke en sikkerhedskopi fra Stav og Regn.' };
+    }
+    if (!Number.isInteger(b.format) || b.format < 1) return { ok: false, error: 'Filen er ikke en sikkerhedskopi fra Stav og Regn.' };
+    if (b.format > BACKUP_FORMAT) return { ok: false, error: 'Sikkerhedskopien er fra en nyere version af appen. Opdatér appen, og prøv igen.' };
+    const state = normalizeState(b.state, levelCounts);
+    const words = new Set(state.customWords.map((w) => w.word));
+    const recordings = [];
+    for (const r of Array.isArray(b.recordings) ? b.recordings : []) {
+      if (!r || !words.has(r.word) || typeof r.type !== 'string' || typeof r.data !== 'string') continue;
+      if (r.data.length > (RECORDING_MAX_BYTES * 4) / 3 + 4) continue;
+      try {
+        recordings.push({ word: r.word, type: r.type, bytes: base64ToBytes(r.data) });
+      } catch (e) { /* ødelagt optagelse springes over */ }
+    }
+    const exported = typeof b.exported === 'string' ? b.exported : '';
+    return {
+      ok: true,
+      state,
+      recordings,
+      summary: {
+        exported,
+        name: state.settings.name,
+        stars: state.stars,
+        stickers: state.stickers.length,
+        rounds: state.history.length,
+        words: state.customWords.length,
+        recordings: recordings.length,
+      },
+    };
+  }
+
+  function backupFileName(name, date) {
+    const slug = String(name || '').toLocaleLowerCase('da')
+      .replace(/æ/g, 'ae').replace(/ø/g, 'oe').replace(/å/g, 'aa')
+      .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+    return `${BACKUP_APP}-${slug ? slug + '-' : ''}${date}.json`;
+  }
+
+  // ---------- Brug uden internet ----------
+
+  // Tekst til voksensiden ud fra service workerens svar: { total, missing, filling, done, todo } eller { error }.
+  // level: 'ok' (alt gemt), 'busy' (henter), 'warn' (mangler noget, eller browseren kan ikke).
+  function offlineStatusText(s, { supported, online }) {
+    if (!supported) return { level: 'warn', text: 'Denne browser kan ikke gemme appen til brug uden internet. Brug Chrome på Android eller Safari på iPad.' };
+    if (!s) return { level: 'busy', text: 'Appen gøres klar til brug uden internet … Hold den åben et øjeblik.' };
+    if (s.error) return { level: 'warn', text: 'Det kunne ikke tjekkes, om appen er gemt på enheden. Prøv igen.' };
+    if (s.filling) return { level: 'busy', text: `Henter til brug uden internet … ${s.done} af ${s.todo} filer. Hold appen åben imens.` };
+    if (!s.missing) return { level: 'ok', text: `✓ Klar til brug uden internet. Appen og alle lydklip er gemt på enheden (${s.total} filer).` };
+    return online
+      ? { level: 'warn', text: `${s.missing} af ${s.total} filer kunne ikke hentes. Tryk "Hent det, der mangler", eller prøv senere.` }
+      : { level: 'warn', text: `${s.missing} af ${s.total} filer mangler (mest lydklip). Forbind enheden til internettet, og åbn appen et øjeblik.` };
   }
 
   // ---------- Installation ----------
@@ -361,10 +532,12 @@
   }
 
   return {
-    LEVEL_UP_AFTER, LEVEL_DOWN_AFTER, AREAS, ROUND_LENGTH, HISTORY_MAX,
+    LEVEL_UP_AFTER, LEVEL_DOWN_AFTER, AREAS, ROUND_LENGTH, HISTORY_MAX, DAILY_GOAL_MAX, dailyProgress,
     newRound, roundStep, saveRound, localDate, awardStickers,
     HARD_WORD_CHANCE, HARD_UNTIL_OK, recordWord, hardWords, weekSummary, completeTask,
-    CUSTOM_WORD_MAX, parseCustomWord, addCustomWord, removeCustomWord, installGuide,
+    CUSTOM_WORD_MAX, parseCustomWord, addCustomWord, addCustomWords, removeCustomWord,
+    pickRecordingType, trimSilence, recordingGain, orphanRecordings,
+    makeBackup, parseBackup, backupFileName, offlineStatusText, installGuide,
     rand, pick, shuffle,
     defaultState, normalizeState, recordResult,
     pickWord, spellTask, makeChoices, mathTask, patternTask,

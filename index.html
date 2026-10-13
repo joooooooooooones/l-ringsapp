@@ -18,6 +18,11 @@
         <div>
           <h1 id="greeting">Hej!</h1>
           <p class="home-sub">Hvad vil du øve?</p>
+          <div class="goal" id="goal" role="img" hidden>
+            <span class="goal-label">Dagens mål</span>
+            <span class="goal-cups" id="goal-cups" aria-hidden="true"></span>
+            <span class="goal-text" id="goal-text"></span>
+          </div>
         </div>
         <div class="home-badges">
           <div class="stars-pill" aria-label="Stjerner">⭐ <span data-stars>0</span></div>
@@ -95,33 +100,37 @@
         <span class="top-spacer"></span>
       </header>
       <div class="parent-body">
+        <div class="kpis" id="kpis"></div>
+        <div class="parent-cols">
         <section class="panel">
-          <h3>Ugens ord</h3>
+          <h3><span aria-hidden="true">📝</span> Ugens ord</h3>
           <form class="word-form" id="word-form" autocomplete="off">
-            <input id="word-input" type="text" maxlength="30" placeholder="Skriv et ord fra skolen" aria-label="Nyt ord" autocapitalize="none" spellcheck="false">
+            <input id="word-input" type="text" maxlength="400" placeholder="Fx: hund, kat, mor" aria-label="Nye ord – gerne flere på én gang" aria-describedby="word-help" autocapitalize="none" spellcheck="false" enterkeyhint="done">
             <button class="small-btn primary" type="submit">Tilføj</button>
           </form>
+          <p class="note" id="word-help">Skriv ét eller flere ord, adskilt af mellemrum eller komma.</p>
           <p class="form-error" id="word-error" role="alert" hidden></p>
-          <div class="chips" id="custom-words"></div>
+          <div class="word-list" id="custom-words"></div>
+          <p class="form-error" id="record-error" role="alert" hidden></p>
           <p class="note" id="words-note"></p>
           <button class="small-btn" id="clear-words" type="button" hidden>Ryd listen til en ny uge</button>
         </section>
 
         <section class="panel">
-          <h3>Den sidste uge</h3>
+          <h3><span aria-hidden="true">📊</span> Den sidste uge</h3>
           <div class="week" id="week"></div>
           <div class="area-stats" id="area-stats"></div>
           <p class="note" id="stats"></p>
         </section>
 
         <section class="panel">
-          <h3>Svære ord</h3>
+          <h3><span aria-hidden="true">🔁</span> Svære ord</h3>
           <div class="chips" id="hard-words"></div>
           <p class="note">Ord med fejl kommer oftere igen, indtil de er stavet rigtigt to gange i træk.</p>
         </section>
 
         <section class="panel">
-          <h3>Niveau</h3>
+          <h3><span aria-hidden="true">🎚️</span> Niveau og dagens mål</h3>
           <div class="field">
             <span>Stave</span>
             <div class="stepper">
@@ -146,11 +155,24 @@
               <button class="small-btn" type="button" data-step="pattern" data-dir="1" aria-label="Højere mønstre-niveau">+</button>
             </div>
           </div>
+          <div class="field">
+            <span>Dagens mål</span>
+            <div class="stepper">
+              <button class="small-btn" type="button" data-goal="-1" aria-label="Færre runder om dagen">−</button>
+              <span id="goal-set"></span>
+              <button class="small-btn" type="button" data-goal="1" aria-label="Flere runder om dagen">+</button>
+            </div>
+          </div>
           <p class="note">Niveauet skifter også af sig selv: 5 rigtige i træk giver nyt niveau, og 3 svære opgaver i træk går et niveau ned.</p>
         </section>
 
         <section class="panel">
-          <h3>Indstillinger</h3>
+          <h3><span aria-hidden="true">⚙️</span> Indstillinger</h3>
+          <div class="field">
+            <span>Brug uden internet</span>
+            <p class="offline-status" id="offline-status" role="status"></p>
+            <button class="small-btn" id="offline-fill" type="button" hidden>⬇️ Hent det, der mangler</button>
+          </div>
           <div class="field">
             <span>App på startskærmen</span>
             <p class="note" id="install-status"></p>
@@ -174,6 +196,27 @@
           </div>
         </section>
 
+        <section class="panel" id="backup-panel">
+          <h3><span aria-hidden="true">💾</span> Sikkerhedskopi</h3>
+          <p class="note" id="backup-status"></p>
+          <div class="btn-row">
+            <button class="small-btn primary" id="backup-save" type="button">💾 Gem sikkerhedskopi</button>
+            <button class="small-btn" id="backup-load" type="button">📂 Gendan fra fil</button>
+            <input id="backup-file" type="file" accept=".json,application/json" hidden>
+          </div>
+          <p class="form-error" id="backup-error" role="alert" hidden></p>
+          <div class="confirm" id="backup-confirm" hidden>
+            <p class="confirm-text" id="backup-summary"></p>
+            <p class="note">Fremskridtet på denne enhed bliver erstattet af sikkerhedskopien.</p>
+            <div class="btn-row">
+              <button class="small-btn danger-solid" id="backup-apply" type="button">Erstat med kopien</button>
+              <button class="small-btn" id="backup-cancel" type="button">Annullér</button>
+            </div>
+          </div>
+          <p class="ok-text" id="backup-ok" role="status" hidden></p>
+        </section>
+        </div>
+
         <button class="small-btn danger" id="reset" type="button">Nulstil alt undtagen ugens ord og indstillinger</button>
       </div>
     </section>
@@ -188,6 +231,7 @@
   <div id="celebrate" class="celebrate" aria-hidden="true"></div>
   <script src="js/data.js"></script>
   <script src="js/logic.js"></script>
+  <script src="js/recordings.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>
